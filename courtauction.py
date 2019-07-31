@@ -40,12 +40,12 @@ data = []                                                   # 데이터를 저�
 for tr in table.find_all('tr'):                             # 모든 <tr> 태그를 찾아서 반복
     tds = list(tr.find_all('td'))                           # 모든 <td> 태그를 찾아서 리스트로 만듦
     for td in tds:                                          # <td> 태그 리스트 반복
-        for item in td.find_all('span'):
-            td_data = item.text
-            data.append(td_data)
-        #if td.find('span'):                                 # <td> 안에 <span> 태그가 있으면
-        #    td_data = td.find('span').text                  # <span> 태그 안에서 데이터를 가져옴
-        #    data.append(td_data)                            # data 리스트에 td 데이터 저장
+        for item in td.find_all('span'):                    # <td> 안에 <span> 태그가 있으면
+            td_data = item.text                             # <span> 태그 안에서 데이터를 가져옴
+            data.append(td_data)                            # data 리스트에 td 데이터 저장
+        #if td.find('span'):                                 
+        #    td_data = td.find('span').text                  
+        #    data.append(td_data)                            
 
 print (data)
 
