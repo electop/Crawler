@@ -10,23 +10,28 @@ options = webdriver.ChromeOptions()
 options.add_argument('window-size=1920x1080')
 options.add_argument("disable-gpu")
 driver = webdriver.Chrome('../driver/chromedriver', options=options)
+
 driver.get('http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1')
-#driver.implicitly_wait(3)
 driver.find_element_by_name('sido').send_keys('경기')
 driver.find_element_by_name('gugun').send_keys('수원시')
-driver.find_element_by_xpath('//*[@id="rltyct1"]').click()
-driver.find_element_by_xpath('//*[@id="rltyct2"]').click()
-driver.find_element_by_xpath('//*[@id="rltyct7"]').click()
-driver.find_element_by_xpath('//*[@id="kyg_srch_option"]/table/tbody/tr[9]/td/input[1]').click()
+driver.find_element_by_xpath('//*[@id="rltyct1"]').click()  # 아파트
+driver.find_element_by_xpath('//*[@id="rltyct2"]').click()  # 주택
+driver.find_element_by_xpath('//*[@id="rltyct7"]').click()  # 오피스텔
+driver.find_element_by_xpath('//*[@id="kyg_srch_option"]/table/tbody/tr[9]/td/input[1]').click()    # 검색하기
 
+# 텍스트 보기
 driver.implicitly_wait(3)
 driver.find_element_by_xpath('//*[@id="list_limit"]').click()
 driver.find_element_by_xpath('//*[@id="list_limit_combo"]/li[6]/nobr').click()
+
+# 100 개씩 보기
 driver.implicitly_wait(3)
 driver.find_element_by_xpath('//*[@id="kyg_list"]/table[1]/tbody/tr/td[8]').click()
 
+# 결과 화면을 이미지로 저장
 #driver.save_screenshot('./images/001.png')
 
+# Beautiful Soup
 html = driver.page_source
 soup = BeautifulSoup(html, 'html.parser')
 
