@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 __author__ = 'electopx@gmail.com'
 
+import re
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
-
-pandas.DataFrame(pd_data, columns=['사건번호', '소재지', '용도','감정가 최저가', '상태', '매각기일'])
 
 #driver = webdriver.Chrome('../driver/chromedriver')
 #driver = webdriver.PhantomJS('../driver/phantomjs')
@@ -45,28 +44,31 @@ soup = BeautifulSoup(html, 'html.parser')
 #status_list = [raw_list[n].find('span').get_text() for n in range(0, len(raw_list))]
 #print (status_list)
 
+pd_data = pd.DataFrame(columns=['사건번호', '소재지', '용도','감정가 최저가', '상태', '매각기일'])
+re_td = re.compile(r'(\<td[^>]+[\>])([^<]*)(\<\/td\>)')
+
 table = soup.find('table', { 'id': 'kyg_list_table' })      # <table id="kyg_list_table">을 찾음
-data = []                                                   # 데이터를 저장할 리스트 생성
 for tr in table.find_all('tr'):                             # 모든 <tr> 태그를 찾아서 반복
     tds = list(tr.find_all('td'))                           # 모든 <td> 태그를 찾아서 리스트로 만듦
+    data = []                                               # 데이터를 저장할 리스트 생성
     for td in tds:                                          # <td> 태그 리스트 반복
         td_data = ''
         previous_data = ''
         for item in td.find_all('span'):                    # <td> 안에 <span> 태그가 있으면
             item_data = item.text.replace('\t', '').replace('\n', ' ').strip()
             if item_data.find('현재창') >= 0: continue
-            print (item_data, len(item_data))
             if previous_data.find(item_data) is -1:
                 if td_data is not '':
                     td_data += ' ' + item_data
                 else:
                     td_data += item_data
             previous_data = item_data                       # <span> 태그 안에서 데이터를 가져옴
+        if td_data is '':
+            item_data = re.sub('(\<\/td\>)', '', re.sub('(\<td[^>]+[\>])', '', str(td))).strip()
+            if item_data.find('<') is -1:
+                td_data += item_data
         if td_data is not '': data.append(td_data)          # data 리스트에 td 데이터 저장
-        #if td.find('span'):                                 
-        #    td_data = td.find('span').text                  
-        #    data.append(td_data)                            
-
-print (data)
+    if len(data) is 6: pd_data.loc[len(pd_data)] = data
+print (pd_data)
 
 driver.close()
