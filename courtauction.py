@@ -115,7 +115,7 @@ def init():
 if init():
     try:
         engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':3306/'+database, encoding='utf-8')
-        pd_data.to_sql(name='interauction', con=engine, if_exists = 'replace')
+        pd_data.to_sql(name='wp_custom_auction', con=engine, if_exists = 'replace')
         print('[OK] Connection success')
 
     # Exception for connection
