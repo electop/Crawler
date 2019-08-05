@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'electopx@gmail.com'
+# command
+# python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx
 
 import re
 import pandas as pd
@@ -49,7 +51,7 @@ soup = BeautifulSoup(html, 'html.parser')
 #status_list = [raw_list[n].find('span').get_text() for n in range(0, len(raw_list))]
 #print (status_list)
 
-pd_data = pd.DataFrame(columns=['사건번호', '소재지', '용도','감정가/최저가', '상태', '매각기일'])
+pd_data = pd.DataFrame(columns=['사건번호', '소재지', '용도','감정가', '상태', '매각기일'])
 re_td = re.compile(r'(\<td[^>]+[\>])([^<]*)(\<\/td\>)')
 
 table = soup.find('table', { 'id': 'kyg_list_table' })      # <table id="kyg_list_table">을 찾음
@@ -74,14 +76,29 @@ for tr in table.find_all('tr'):                             # 모든 <tr> 태그
                 td_data += item_data
         if td_data is not '': data.append(td_data)          # data 리스트에 td 데이터 저장
     if len(data) is 6: pd_data.loc[len(pd_data)] = data
+
+# '매각기일' 데이터 처리
+pd_data['매각기일'] = pd_data['매각기일'].str.split(' ', n=0, expand=True)[0].str.strip()
+
+# '감정가','최저가' 데이터 처리
+temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
+appraisalPrice = temp_data[0].str.strip()
+minPrice = temp_data[1].str.strip()
+pd_data['감정가'] = appraisalPrice
+pd_data.insert(4, '최저가', minPrice)
+#print (pd_data['감정가'])
+#print (pd_data['최저가'])
+
 print (pd_data)
-#print (pd_data['감정가/최저가'])
+
 driver.close()
 
 user = 'user'
 password = ''
 host = ''
-database = ''
+port = ''
+structure = ''
+table = ''
 config = {}
 
 args = sys.argv[0:]
@@ -89,7 +106,7 @@ optionLen = len(args)
 
 def init():
 
-    global user, password, host, database, config
+    global user, password, host, port, structure, table, config
 
     if (len(args) <= 1):
         print('[ERR] There is no option')
@@ -97,25 +114,29 @@ def init():
 
     for i in range(optionLen-1):
         data = str(args[i+1])
-        if args[i].upper() == '-U':		# -U : user name of MySQL (e.g.: root)
+        if args[i].lower() == '--user':		    # --user : user name of MySQL (e.g.: root)
             user = data
-        elif args[i].upper() == '-P':	# -P : password of username
+        elif args[i].lower() == '--password':	# --password : password of username
             password = data
-        elif args[i].upper() == '-H':	# -H : host of MySQL (e.g.: 127.0.0.1)
+        elif args[i].lower() == '--host':	    # --host : host of MySQL (e.g.: 127.0.0.1)
             host = data
-        elif args[i].upper() == '-D':	# -D : database name (e.g.: wp_aitest)
-            database = data
+        elif args[i].lower() == '--port':	    # --port : port of mySQl (e.g.: 3306)
+            port = data
+        elif args[i].lower() == '--structure':	# --structure : structure name (e.g.: wordpress)
+            structure = data
+        elif args[i].lower() == '--table':	    # --table : table name (e.g.: wp_custom_xxx)
+            table = data
 
-    if (user == '') or (password == '') or (host == '') or (database == ''):
-        print('[ERR] Please input all required data like user, password, host and database name.')
+    if (user == '') or (password == '') or (host == '') or (port == '') or (structure == '') or (table == ''):
+        print('[ERR] Please input all required data like user, password, host, port, structure and table name.')
         return False
 
     return True
 
 if init():
     try:
-        engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':3306/'+database, encoding='utf-8')
-        pd_data.to_sql(name='wp_custom_auction', con=engine, if_exists = 'replace')
+        engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':3306/'+structure, encoding='utf-8')
+        pd_data.to_sql(name=table, con=engine, if_exists = 'replace')
         print('[OK] Connection success')
 
     # Exception for connection
@@ -123,7 +144,7 @@ if init():
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
             print('[ERR] Something is wrong with your user name or password')
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
-            print('[ERR] Database does not exist')
+            print('[ERR] Database structure does not exist')
         else:
             print('[ERR]', err)
 else:
