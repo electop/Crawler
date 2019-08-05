@@ -135,7 +135,7 @@ def init():
 
 if init():
     try:
-        engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':3306/'+structure, encoding='utf-8')
+        engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':'+port+'/'+structure, encoding='utf-8')
         pd_data.to_sql(name=table, con=engine, if_exists = 'replace')
         print('[OK] Connection success')
 
