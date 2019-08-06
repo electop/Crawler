@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 __author__ = 'electopx@gmail.com'
-# command
-# python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx
 
 import re
 import pandas as pd
@@ -82,10 +80,10 @@ pd_data['매각기일'] = pd_data['매각기일'].str.split(' ', n=0, expand=Tru
 
 # '감정가','최저가' 데이터 처리
 temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
-appraisalPrice = temp_data[0].str.strip()
-minPrice = temp_data[1].str.strip()
+appraisalPrice = temp_data[0].str.strip()                   # 감정가
+minPrice = temp_data[1].str.strip()                         # 최저가
 pd_data['감정가'] = appraisalPrice
-pd_data.insert(4, '최저가', minPrice)
+pd_data.insert(4, '최저가', minPrice)                        # 4th index에 column 추가
 #print (pd_data['감정가'])
 #print (pd_data['최저가'])
 
@@ -93,6 +91,7 @@ print (pd_data)
 
 driver.close()
 
+# information for DB
 user = 'user'
 password = ''
 host = ''
@@ -112,6 +111,8 @@ def init():
         print('[ERR] There is no option')
         return False
 
+    # Command
+    # python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx
     for i in range(optionLen-1):
         data = str(args[i+1])
         if args[i].lower() == '--user':		    # --user : user name of MySQL (e.g.: root)
@@ -135,7 +136,9 @@ def init():
 
 if init():
     try:
+        # Accessing the DB
         engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':'+port+'/'+structure, encoding='utf-8')
+        # Entering data into the DB
         pd_data.to_sql(name=table, con=engine, if_exists = 'replace')
         print('[OK] Connection success')
 
