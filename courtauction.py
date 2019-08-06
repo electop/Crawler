@@ -98,14 +98,13 @@ host = ''
 port = ''
 structure = ''
 table = ''
-config = {}
 
 args = sys.argv[0:]
 optionLen = len(args)
 
 def init():
 
-    global user, password, host, port, structure, table, config
+    global user, password, host, port, structure, table
 
     if (len(args) <= 1):
         print('[ERR] There is no option')
