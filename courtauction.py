@@ -49,20 +49,25 @@ soup = BeautifulSoup(html, 'html.parser')
 #status_list = [raw_list[n].find('span').get_text() for n in range(0, len(raw_list))]
 #print (status_list)
 
-pd_data = pd.DataFrame(columns=['사건번호', '소재지', '용도','감정가', '상태', '매각기일'])
+pd_data = pd.DataFrame(columns=['사건번호', '소재지', '용도','감정가', '상태', '매각기일', '유찰수'])
 re_td = re.compile(r'(\<td[^>]+[\>])([^<]*)(\<\/td\>)')
+re_cancel = re.compile(r'(.+\()([0-9])')
 
 table = soup.find('table', { 'id': 'kyg_list_table' })      # <table id="kyg_list_table">을 찾음
 for tr in table.find_all('tr'):                             # 모든 <tr> 태그를 찾아서 반복
     tds = list(tr.find_all('td'))                           # 모든 <td> 태그를 찾아서 리스트로 만듦
     data = []                                               # 데이터를 저장할 리스트 생성
+    cancel_number = '0'
     for td in tds:                                          # <td> 태그 리스트 반복
         td_data = ''
         previous_data = ''
+        td_text = td.text.replace('\t', '').replace('\n', ' ').strip()
         for item in td.find_all('span'):                    # <td> 안에 <span> 태그가 있으면
             item_data = item.text.replace('\t', '').replace('\n', ' ').strip()
             if item_data.find('현재창') >= 0: continue
-            if previous_data.find(item_data) is -1:
+            elif item_data.find('건물') >= 0 and item_data.find('토지') is -1:
+                td_data += ' ' + item_data + ' [토지 ]'
+            elif previous_data.find(item_data) is -1:
                 if td_data is not '':
                     td_data += ' ' + item_data
                 else:
@@ -72,8 +77,11 @@ for tr in table.find_all('tr'):                             # 모든 <tr> 태그
             item_data = re.sub('(\<\/td\>)', '', re.sub('(\<td[^>]+[\>])', '', str(td))).strip()
             if item_data.find('<') is -1:
                 td_data += item_data
+        if (td_text.find('진행') is not -1 or td_text.find('취하') is not -1) and td_text.find('(') is not -1:
+            cancel_number = re.search(re_cancel, td_text).group(2)
         if td_data is not '': data.append(td_data)          # data 리스트에 td 데이터 저장
-    if len(data) is 6: pd_data.loc[len(pd_data)] = data
+    data.append(cancel_number)
+    if len(data) is 7: pd_data.loc[len(pd_data)] = data
 
 # '매각기일' 데이터 처리
 pd_data['매각기일'] = pd_data['매각기일'].str.split(' ', n=0, expand=True)[0].str.strip()
@@ -86,6 +94,13 @@ pd_data['감정가'] = appraisalPrice
 pd_data.insert(4, '최저가', minPrice)                        # 4th index에 column 추가
 #print (pd_data['감정가'])
 #print (pd_data['최저가'])
+
+# '소재지' 데이터 처리
+temp_data = pd_data['소재지'].str.split('[', n=0, expand=True)
+pd_data['소재지'] = temp_data[0].str.strip()                 # 소재지
+pd_data.insert(2, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 2th index에 column 추가
+pd_data.insert(3, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
+pd_data.insert(4, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 4th index에 column 추가
 
 print (pd_data)
 
