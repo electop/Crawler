@@ -5,6 +5,7 @@ import re
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 import sys
 import datetime
@@ -102,8 +103,56 @@ pd_data.insert(2, '건물', temp_data[1].str.replace('건물 ','').str.replace('
 pd_data.insert(3, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
 pd_data.insert(4, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 4th index에 column 추가
 
-print (pd_data)
+# '소재지(도로명)', '행정구역코드', '도로명코드' 데이터 처리
+area_data = []
+road_data = []
+underground_data = []
+new_address_data = []
+building_data = []
+sub_building_data = []
+re_area = re.compile(r'(<admCd>)([0-9]+)')
+re_road = re.compile(r'(<rnMgtSn>)([0-9]+)')
+re_underground = re.compile(r'(<udrtYn>)([0-9]+)')
+re_building = re.compile(r'(<buldMnnm>)([0-9]+)')
+re_sub_building = re.compile(r'(<buldSlno>)([0-9]+)')
+re_address = re.compile(r'(^.+[가-힣]+([동]|[로0-9번길])\s)[0-9\-]+')
+driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
+for i in range(len(pd_data)):
+    address = re.search(re_address, pd_data.loc[i].소재지).group(0)
+    driver.find_element_by_xpath('//*[@id="keywordRoad"]').click()
+    driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.CONTROL, 'a')
+    driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(address)
+    driver.find_element_by_xpath('//*[@id="formRoadSearch"]/fieldset[1]/div[2]/a').click()             # 체험하기
+    driver.implicitly_wait(1)
+    # '소재지(도로명)'
+    new_address = driver.find_element_by_xpath('//*[@id="listRoadSearch"]/table/tbody/tr/td/p[2]').text
+    new_address_data.append(new_address)
+    driver.find_element_by_xpath('//*[@id="listRoadSearch"]/p/a').click()                              # 검색결과형식보기
+    # '행정구역코드'
+    area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+    area_data.append(area)
+    # '도로명코드'
+    road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+    road_data.append(road)
+    # '지하여부'
+    underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+    underground_data.append(underground)
+    # '건물본번'
+    building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+    building_data.append(building)
+    # '건물부번'
+    sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+    sub_building_data.append(sub_building)
+    # HOME
+    driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
+pd_data.insert(2, '소재지(도로명)', new_address_data)
+pd_data.insert(3, '행정구역코드', area_data)
+pd_data.insert(4, '도로명코드', road_data)
+pd_data.insert(5, '지하여부', underground_data)
+pd_data.insert(6, '건물본번', building_data)
+pd_data.insert(7, '건물부번', sub_building_data)
 
+print (pd_data)
 driver.close()
 
 # information for DB
