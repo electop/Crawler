@@ -16,7 +16,7 @@ from mysql.connector import errorcode
 
 # 실행 초기화
 def init():
-    global user, password, host, port, structure, table
+    global user, password, host, port, key, structure, table
 
     if (len(args) <= 1):
         print('[ERR] There is no option')
@@ -34,15 +34,15 @@ def init():
             host = data
         elif args[i].lower() == '--port':	    # --port : port of mySQl (e.g.: 3306)
             port = data
+        elif args[i].lower() == '--key':	    # --key : OPen API key (e.g.: 9ActTOxJHu43bYcBJRqA3rM4nzaC4k...)
+            key = data
         elif args[i].lower() == '--structure':	# --structure : structure name (e.g.: wordpress)
             structure = data
         elif args[i].lower() == '--table':	    # --table : table name (e.g.: wp_custom_xxx)
             table = data
-        elif args[i].lower() == '--key':	    # --key : OPen API key (e.g.: 9ActTOxJHu43bYcBJRqA3rM4nzaC4k...)
-            table = data
 
-    if (user == '') or (password == '') or (host == '') or (port == '') or (structure == '') or (table == ''):
-        print('[ERR] Please input all required data like user, password, host, port, structure and table name.')
+    if (password == '') or (host == '') or (port == '') or (key == '') or (structure == '') or (table == ''):
+        print('[ERR] Please input all required data like user, password, host, port, key, structure and table name.')
         return False
 
     return True
@@ -50,9 +50,11 @@ def init():
 # 공공데이터포털 > 국토교통부 실거래가 정보 > 아파트매매 실거래 상세자료
 # https://www.data.go.kr/dataset/3050988/openapi.do
 def getActualPrice(year, month, code, key):
+    date = str(year)
+    if month < 10: date += '0' + str(month)
+    else: date += str(month)
     url = 'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTrade'
-    url += '?&LAWD_CD=' + code + '&DEAL_YMD=' + year + month + '&serviceKey=' + key
-    print (url)
+    url += '?&LAWD_CD=' + code + '&DEAL_YMD=' + date + '&serviceKey=' + key
 
     options = webdriver.ChromeOptions()
     options.add_argument('window-size=1920x1080')
@@ -248,6 +250,7 @@ user = 'user'
 password = ''
 host = ''
 port = ''
+key = ''
 structure = ''
 table = ''
 
@@ -272,3 +275,8 @@ if init():
             print('[ERR]', err)
 else:
     print("[ERR] Connection failure")
+
+# 실거래가 데이터 수집
+code = '41113'
+now = datetime.datetime.now()
+getActualPrice(now.year, now.month, code, key).to_csv('actualPrice.csv')
