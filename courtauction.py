@@ -2,6 +2,7 @@
 __author__ = 'electopx@gmail.com'
 
 import re
+import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -233,6 +234,11 @@ pd_data.insert(4, '도로명코드', road_data)
 pd_data.insert(5, '지하여부', underground_data)
 pd_data.insert(6, '건물본번', building_data)
 pd_data.insert(7, '건물부번', sub_building_data)
+
+# '상태' 데이터 처리
+temp_data = pd_data['상태'].str.split(' ', n=0, expand=True)
+pd_data['상태'] = temp_data[0].str.strip()
+pd_data.insert(15, '가격률', temp_data[1].str.strip())
 
 print (pd_data)
 driver.close()
