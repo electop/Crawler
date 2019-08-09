@@ -13,6 +13,77 @@ import mysql.connector
 from sqlalchemy import create_engine
 from mysql.connector import errorcode
 
+# 실행 초기화
+def init():
+    global user, password, host, port, structure, table
+
+    if (len(args) <= 1):
+        print('[ERR] There is no option')
+        return False
+
+    # Command
+    # python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx --key 'xxxx'
+    for i in range(optionLen-1):
+        data = str(args[i+1])
+        if args[i].lower() == '--user':		    # --user : user name of MySQL (e.g.: root)
+            user = data
+        elif args[i].lower() == '--password':	# --password : password of username
+            password = data
+        elif args[i].lower() == '--host':	    # --host : host of MySQL (e.g.: 127.0.0.1)
+            host = data
+        elif args[i].lower() == '--port':	    # --port : port of mySQl (e.g.: 3306)
+            port = data
+        elif args[i].lower() == '--structure':	# --structure : structure name (e.g.: wordpress)
+            structure = data
+        elif args[i].lower() == '--table':	    # --table : table name (e.g.: wp_custom_xxx)
+            table = data
+        elif args[i].lower() == '--key':	    # --key : OPen API key (e.g.: 9ActTOxJHu43bYcBJRqA3rM4nzaC4k...)
+            table = data
+
+    if (user == '') or (password == '') or (host == '') or (port == '') or (structure == '') or (table == ''):
+        print('[ERR] Please input all required data like user, password, host, port, structure and table name.')
+        return False
+
+    return True
+
+# 공공데이터포털 > 국토교통부 실거래가 정보 > 아파트매매 실거래 상세자료
+# https://www.data.go.kr/dataset/3050988/openapi.do
+def getActualPrice(year, month, code, key):
+    url = 'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTrade'
+    url += '?&LAWD_CD=' + code + '&DEAL_YMD=' + year + month + '&serviceKey=' + key
+    print (url)
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('window-size=1920x1080')
+    options.add_argument("disable-gpu")
+
+    driver = webdriver.Chrome('../driver/chromedriver', options=options)
+    driver.get(url)
+    
+    # Beautiful Soup
+    xml_file = driver.page_source
+    xml_soup = BeautifulSoup(xml_file, 'lxml-xml')
+    xml = xml_soup.find_all('item')
+    apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
+
+    for apt in xml:
+        item_data = []
+        item_data.append(apt.find('년').text.strip())
+        item_data.append(apt.find('월').text.strip())
+        item_data.append(apt.find('일').text.strip())
+        item_data.append(apt.find('거래금액').text.strip())
+        item_data.append(apt.find('건축년도').text.strip())
+        item_data.append(apt.find('법정동').text.strip())
+        item_data.append(apt.find('아파트').text.strip())
+        item_data.append(apt.find('전용면적').text.strip())
+        item_data.append(apt.find('지번').text.strip())
+        item_data.append(apt.find('지역코드').text.strip())
+        item_data.append(apt.find('층').text.strip())
+        apt_data.loc[len(apt_data)] = item_data
+
+    driver.close()
+    return apt_data
+
 #driver = webdriver.Chrome('../driver/chromedriver')
 #driver = webdriver.PhantomJS('../driver/phantomjs')
 options = webdriver.ChromeOptions()
@@ -30,12 +101,12 @@ driver.find_element_by_xpath('//*[@id="rltyct7"]').click()  # 오피스텔
 driver.find_element_by_xpath('//*[@id="kyg_srch_option"]/table/tbody/tr[9]/td/input[1]').click()    # 검색하기
 
 # 100개씩
-driver.implicitly_wait(3)
+driver.implicitly_wait(1)
 driver.find_element_by_xpath('//*[@id="list_limit"]').click()
 driver.find_element_by_xpath('//*[@id="list_limit_combo"]/li[6]/nobr').click()
 
 # 텍스트 보기
-driver.implicitly_wait(3)
+driver.implicitly_wait(1)
 driver.find_element_by_xpath('//*[@id="kyg_list"]/table[1]/tbody/tr/td[8]').click()
 
 # 결과 화면을 이미지로 저장
@@ -44,7 +115,6 @@ driver.find_element_by_xpath('//*[@id="kyg_list"]/table[1]/tbody/tr/td[8]').clic
 # Beautiful Soup
 html = driver.page_source
 soup = BeautifulSoup(html, 'html.parser')
-
 #raw_list = soup.find_all('tr', 'kyg_list_style')
 #raw_list = soup.find_all('td', 'status')
 #status_list = [raw_list[n].find('span').get_text() for n in range(0, len(raw_list))]
@@ -81,6 +151,7 @@ for tr in table.find_all('tr'):                             # 모든 <tr> 태그
         if (td_text.find('진행') is not -1 or td_text.find('취하') is not -1) and td_text.find('(') is not -1:
             cancel_number = re.search(re_cancel, td_text).group(2)
         if td_data is not '': data.append(td_data)          # data 리스트에 td 데이터 저장
+    
     data.append(cancel_number)
     if len(data) is 7: pd_data.loc[len(pd_data)] = data
 
@@ -97,11 +168,20 @@ pd_data.insert(4, '최저가', minPrice)                        # 4th index에 c
 #print (pd_data['최저가'])
 
 # '소재지' 데이터 처리
+floor = []
+re_floor = re.compile(r'([0-9]+층)')
 temp_data = pd_data['소재지'].str.split('[', n=0, expand=True)
-pd_data['소재지'] = temp_data[0].str.strip()                 # 소재지
-pd_data.insert(2, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 2th index에 column 추가
-pd_data.insert(3, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
-pd_data.insert(4, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 4th index에 column 추가
+for element in pd_data['소재지']:
+    floor_data = re.search(re_floor, element)
+    if floor_data:
+        floor.append(floor_data.group(0))
+    else:
+        floor.append(None)
+pd_data['소재지'] = temp_data[0].str.replace(r'([0-9]+(번지|층))', '').str.replace(r'[ ]+', ' ').str.strip()   # 소재지
+pd_data.insert(2, '층수', floor)                                                                             # 2th index에 column 추가
+pd_data.insert(3, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
+pd_data.insert(4, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 4th index에 column 추가
+pd_data.insert(5, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 5th index에 column 추가
 
 # '소재지(도로명)', '행정구역코드', '도로명코드' 데이터 처리
 area_data = []
@@ -117,6 +197,7 @@ re_building = re.compile(r'(<buldMnnm>)([0-9]+)')
 re_sub_building = re.compile(r'(<buldSlno>)([0-9]+)')
 re_address = re.compile(r'(^.+[가-힣]+([동]|[로0-9번길])\s)[0-9\-]+')
 driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
+
 for i in range(len(pd_data)):
     address = re.search(re_address, pd_data.loc[i].소재지).group(0)
     driver.find_element_by_xpath('//*[@id="keywordRoad"]').click()
@@ -145,6 +226,7 @@ for i in range(len(pd_data)):
     sub_building_data.append(sub_building)
     # HOME
     driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
+
 pd_data.insert(2, '소재지(도로명)', new_address_data)
 pd_data.insert(3, '행정구역코드', area_data)
 pd_data.insert(4, '도로명코드', road_data)
@@ -165,37 +247,6 @@ table = ''
 
 args = sys.argv[0:]
 optionLen = len(args)
-
-def init():
-
-    global user, password, host, port, structure, table
-
-    if (len(args) <= 1):
-        print('[ERR] There is no option')
-        return False
-
-    # Command
-    # python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx
-    for i in range(optionLen-1):
-        data = str(args[i+1])
-        if args[i].lower() == '--user':		    # --user : user name of MySQL (e.g.: root)
-            user = data
-        elif args[i].lower() == '--password':	# --password : password of username
-            password = data
-        elif args[i].lower() == '--host':	    # --host : host of MySQL (e.g.: 127.0.0.1)
-            host = data
-        elif args[i].lower() == '--port':	    # --port : port of mySQl (e.g.: 3306)
-            port = data
-        elif args[i].lower() == '--structure':	# --structure : structure name (e.g.: wordpress)
-            structure = data
-        elif args[i].lower() == '--table':	    # --table : table name (e.g.: wp_custom_xxx)
-            table = data
-
-    if (user == '') or (password == '') or (host == '') or (port == '') or (structure == '') or (table == ''):
-        print('[ERR] Please input all required data like user, password, host, port, structure and table name.')
-        return False
-
-    return True
 
 if init():
     try:
