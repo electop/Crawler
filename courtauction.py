@@ -279,4 +279,4 @@ else:
 # 실거래가 데이터 수집
 code = '41113'
 now = datetime.datetime.now()
-getActualPrice(now.year, now.month, code, key).to_csv('actualPrice.csv')
+getActualPrice(now.year, now.month, code, key).to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
