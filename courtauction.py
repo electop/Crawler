@@ -2,6 +2,7 @@
 __author__ = 'electopx@gmail.com'
 
 import re
+import math
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -10,12 +11,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 import sys
 import datetime
+import dateutil.relativedelta
 import mysql.connector
 from sqlalchemy import create_engine
 from mysql.connector import errorcode
 
 # 실행 초기화
 def init():
+    args = sys.argv[0:]
+    optionLen = len(args)
     global user, password, host, port, key, structure, table
 
     if (len(args) <= 1):
@@ -49,7 +53,7 @@ def init():
 
 # 공공데이터포털 > 국토교통부 실거래가 정보 > 아파트매매 실거래 상세자료
 # https://www.data.go.kr/dataset/3050988/openapi.do
-def getActualPrice(year, month, code, key):
+def getActualPrice(apt_data, year, month, code, key):
     date = str(year)
     if month < 10: date += '0' + str(month)
     else: date += str(month)
@@ -67,7 +71,7 @@ def getActualPrice(year, month, code, key):
     xml_file = driver.page_source
     xml_soup = BeautifulSoup(xml_file, 'lxml-xml')
     xml = xml_soup.find_all('item')
-    apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
+    #apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
 
     for apt in xml:
         item_data = []
@@ -86,6 +90,7 @@ def getActualPrice(year, month, code, key):
 
     driver.close()
     return apt_data
+
 
 #driver = webdriver.Chrome('../driver/chromedriver')
 #driver = webdriver.PhantomJS('../driver/phantomjs')
@@ -170,34 +175,42 @@ pd_data.insert(4, '최저가', minPrice)                        # 4th index에 c
 #print (pd_data['감정가'])
 #print (pd_data['최저가'])
 
-# '소재지' 데이터 처리
+# '소재지', '층수', '동', '호' 데이터 처리
+ho = []
+dong = []
 floor = []
+re_dong = re.compile(r'([0-9]+동)')
+re_ho = re.compile(r'([0-9]+호)')
 re_floor = re.compile(r'([0-9]+층)')
 temp_data = pd_data['소재지'].str.split('[', n=0, expand=True)
 for element in pd_data['소재지']:
+    ho_data = re.search(re_ho, element)
+    dong_data = re.search(re_dong, element)
     floor_data = re.search(re_floor, element)
-    if floor_data:
-        floor.append(floor_data.group(0))
-    else:
-        floor.append(None)
+    if floor_data: floor.append(floor_data.group(0))
+    else: floor.append(None)
+    if dong_data: dong.append(dong_data.group(0))
+    else: dong.append(None)
+    if ho_data: ho.append(ho_data.group(0))
+    else: ho.append(None)
 pd_data['소재지'] = temp_data[0].str.replace(r'([0-9]+(번지|층))', '').str.replace(r'[ ]+', ' ').str.strip()   # 소재지
-pd_data.insert(2, '층수', floor)                                                                             # 2th index에 column 추가
-pd_data.insert(3, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
-pd_data.insert(4, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 4th index에 column 추가
-pd_data.insert(5, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 5th index에 column 추가
+pd_data.insert(3, '층수', floor)                                                                             # 2th index에 column 추가
+pd_data.insert(4, '동', dong)                                                                             # 2th index에 column 추가
+pd_data.insert(5, '호', ho)                                                                             # 2th index에 column 추가
+pd_data.insert(6, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
+pd_data.insert(7, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 4th index에 column 추가
+pd_data.insert(8, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 5th index에 column 추가
 
 # '소재지(도로명)', '행정구역코드', '도로명코드' 데이터 처리
-area_data = []
-road_data = []
-underground_data = []
-new_address_data = []
-building_data = []
-sub_building_data = []
+area_data, road_data, underground_data, new_address_data, building_data = [], [], [], [], []
+sub_building_data, building_name_data, dong_name_data = [], [], []
 re_area = re.compile(r'(<admCd>)([0-9]+)')
 re_road = re.compile(r'(<rnMgtSn>)([0-9]+)')
 re_underground = re.compile(r'(<udrtYn>)([0-9]+)')
 re_building = re.compile(r'(<buldMnnm>)([0-9]+)')
 re_sub_building = re.compile(r'(<buldSlno>)([0-9]+)')
+re_building_name = re.compile(r'(<bdNm>)([가-힣0-9]+)')
+re_dong_name = re.compile(r'(<emdNm>)([가-힣0-9]+)')
 re_address = re.compile(r'(^.+[가-힣]+([동]|[로0-9번길])\s)[0-9\-]+')
 driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
 
@@ -227,43 +240,66 @@ for i in range(len(pd_data)):
     # '건물부번'
     sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
     sub_building_data.append(sub_building)
+    # '법정동'
+    dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+    if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
+    else: dong_name_data.append(None)
+    # '아파트'
+    building_name = re.search(re_building_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+    if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2))
+    else: building_name_data.append(None)
     # HOME
     driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
 
+driver.close()
+
 pd_data.insert(2, '소재지(도로명)', new_address_data)
-pd_data.insert(3, '행정구역코드', area_data)
-pd_data.insert(4, '도로명코드', road_data)
-pd_data.insert(5, '지하여부', underground_data)
-pd_data.insert(6, '건물본번', building_data)
-pd_data.insert(7, '건물부번', sub_building_data)
+pd_data.insert(4, '법정동', dong_name_data)
+pd_data.insert(5, '아파트', building_name_data)
+pd_data.insert(12, '행정구역코드', area_data)
+pd_data.insert(13, '도로명코드', road_data)
+pd_data.insert(14, '지하여부', underground_data)
+pd_data.insert(15, '건물본번', building_data)
+pd_data.insert(16, '건물부번', sub_building_data)
 
 # '상태' 데이터 처리
 temp_data = pd_data['상태'].str.split(' ', n=0, expand=True)
 pd_data['상태'] = temp_data[0].str.strip()
-pd_data.insert(15, '가격률', temp_data[1].str.strip())
+pd_data.insert(17, '최저가율', temp_data[1].str.strip())
 
-print (pd_data)
-driver.close()
+# '전용면적' 데이터 처리
+dedicated_area_data = []
+temp_data = pd_data['건물'].str.replace('평', '').str.replace(',', '').astype(float)
+for temp in temp_data:
+    dedicated_area = round(temp * 3.30579, 2)
+    dedicated_area_data.append(dedicated_area)
+pd_data.insert(9, '전용면적', dedicated_area_data)
 
 # information for DB
-user = 'user'
-password = ''
-host = ''
-port = ''
-key = ''
-structure = ''
-table = ''
-
-args = sys.argv[0:]
-optionLen = len(args)
+user, password, host, port, key= 'user', '', '', '', ''
+structure, table = '', ''
 
 if init():
     try:
+        # 실거래가 데이터 수집
+        now = datetime.datetime.now()
+        apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
+        codes = pd_data['행정구역코드'].str[:5]
+        codes = codes.drop_duplicates()
+        for i, code in codes.iteritems():
+            for j in range(3):
+                now_delta = now + dateutil.relativedelta.relativedelta(months=-j)
+                getActualPrice(apt_data, now_delta.year, now_delta.month, code, key)
+        apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
+
+        print (pd_data)
+        print (apt_data)
+
         # Accessing the DB
         engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':'+port+'/'+structure, encoding='utf-8')
         # Entering data into the DB
         pd_data.to_sql(name=table, con=engine, if_exists = 'replace')
-        print('[OK] Connection success')
+        print('[OK] Execution success')
 
     # Exception for connection
     except mysql.connector.Error as err:
@@ -273,10 +309,7 @@ if init():
             print('[ERR] Database structure does not exist')
         else:
             print('[ERR]', err)
-else:
-    print("[ERR] Connection failure")
 
-# 실거래가 데이터 수집
-code = '41113'
-now = datetime.datetime.now()
-getActualPrice(now.year, now.month, code, key).to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
+else:
+    print("[ERR] Execution failure")
+
