@@ -3,6 +3,7 @@ __author__ = 'electopx@gmail.com'
 
 import re
 import math
+import time
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -15,6 +16,27 @@ import dateutil.relativedelta
 import mysql.connector
 from sqlalchemy import create_engine
 from mysql.connector import errorcode
+
+pd.options.mode.chained_assignment = None  # default='warn'
+
+# the value of pandas to string
+def to_str(var):
+    return str(list(np.reshape(np.asarray(var), (1, np.size(var)))[0]))[1:-1]
+
+# Finding index of new address
+def find_index(jibun, text):
+    index = 0
+    juso_data = re.split(r'[ ](?=<jibunAddr>)', text)
+    for juso in juso_data:
+        juso = re.sub(r'(<\/jibunAddr>[\s\w\W]+)', '', juso[11:])
+        if jibun in juso: break
+        else: index += 1
+
+    return index
+
+def get_juso(index, text):
+    if index > 0: return re.split(r'[ ](?=<juso>)', text)[index]
+    else: return text
 
 # 실행 초기화
 def init():
@@ -96,7 +118,6 @@ user, password, host, port, key= 'user', '', '', '', ''
 structure, table_name = '', ''
 
 if init():
-
     #driver = webdriver.Chrome('../driver/chromedriver')
     #driver = webdriver.PhantomJS('../driver/phantomjs')
     options = webdriver.ChromeOptions()
@@ -198,13 +219,13 @@ if init():
         else: dong.append(None)
         if ho_data: ho.append(ho_data.group(0))
         else: ho.append(None)
-    pd_data['소재지'] = temp_data[0].str.replace(r'([0-9]+(번지|층))', '').str.replace(r'[ ]+', ' ').str.strip()   # 소재지
-    pd_data.insert(3, '층수', floor)                                                                             # 2th index에 column 추가
-    pd_data.insert(4, '동', dong)                                                                             # 2th index에 column 추가
-    pd_data.insert(5, '호', ho)                                                                             # 2th index에 column 추가
-    pd_data.insert(6, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())          # 3rd index에 column 추가
-    pd_data.insert(7, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())          # 4th index에 column 추가
-    pd_data.insert(8, '특수조건', temp_data[3].str.replace(']','').str.strip())                              # 5th index에 column 추가
+    pd_data['소재지'] = temp_data[0].str.replace(r'([0-9]+(번지|층))', '').str.replace(r'[ ]+', ' ').str.strip()     # 소재지
+    pd_data.insert(3, '층수', floor)                                                                               # 3rd index에 column 추가
+    pd_data.insert(4, '동', dong)                                                                                 # 4th index에 column 추가
+    pd_data.insert(5, '호', ho)                                                                                   # 5th index에 column 추가
+    pd_data.insert(6, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())                 # 6th index에 column 추가
+    pd_data.insert(7, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())                 # 7th index에 column 추가
+    pd_data.insert(8, '특수조건', temp_data[3].str.replace(']','').str.strip())                                     # 8th index에 column 추가
 
     # '소재지(도로명)', '행정구역코드', '도로명코드' 데이터 처리
     area_data, road_data, underground_data, new_address_data, building_data = [], [], [], [], []
@@ -223,42 +244,65 @@ if init():
 
     for i in range(len(pd_data)):
         address = re.search(re_address, pd_data.loc[i].소재지).group(0)
+        jibun = re.search(r'[0-9\-]+$', address).group(0)
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').click()
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.CONTROL, 'a')
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(address)
-        driver.find_element_by_xpath('//*[@id="formRoadSearch"]/fieldset[1]/div[2]/a').click()             # 체험하기
+        driver.find_element_by_xpath('//*[@id="formRoadSearch"]/fieldset[1]/div[2]/a').click()                      # 체험하기
         driver.implicitly_wait(1)
+        driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)        
+        driver.find_element_by_xpath('//*[@id="listRoadSearch"]/p/a').click()                                       # 검색결과형식보기 > 열기
+        index = find_index(jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)               # Getting index
+        if index > 1: index_str = '['+str(index)+']'
+        else: index_str = ''
         # '소재지(도로명)'
-        new_address = driver.find_element_by_xpath('//*[@id="listRoadSearch"]/table/tbody/tr/td/p[2]').text
+        new_address = driver.find_element_by_xpath('//*[@id="listRoadSearch"]/table/tbody/tr'+index_str+'/td/p[2]').text
         new_address_data.append(new_address)
-        driver.find_element_by_xpath('//*[@id="listRoadSearch"]/p/a').click()                              # 검색결과형식보기
+        # xml <juso> data
+        juso = get_juso(index, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
         # '법정동'
-        dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+        #dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+        #if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
+        #else: dong_name_data.append(None)
+        dong_name = re.search(re_dong_name, juso)
         if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
         else: dong_name_data.append(None)
         # '아파트'
-        building_name = re.search(re_building_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+        #building_name = re.search(re_building_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+        #if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
+        #else: building_name_data.append(None)
+        building_name = re.search(re_building_name, juso)
         if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
         else: building_name_data.append(None)
         # '행정구역코드'
-        area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #area_data.append(area)
+        area = re.search(re_area, juso).group(2)
         area_data.append(area)
         # '도로명코드'
-        road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #road_data.append(road)
+        road = re.search(re_road, juso).group(2)
         road_data.append(road)
         # '지하여부'
-        underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #underground_data.append(underground)
+        underground = re.search(re_underground, juso).group(2)
         underground_data.append(underground)
         # '지번'
-        jibun = re.search(re_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        sub_jibun = re.search(re_sub_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        if sub_jibun is not '0': jibun += '-' + sub_jibun
+        #jibun = re.search(re_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #sub_jibun = re.search(re_sub_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #if sub_jibun is not '0': jibun += '-' + sub_jibun
         jibun_data.append(jibun)
         # '건물본번'
-        building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #building_data.append(building)
+        building = re.search(re_building, juso).group(2)
         building_data.append(building)
         # '건물부번'
-        sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+        #sub_building_data.append(sub_building)
+        sub_building = re.search(re_sub_building, juso).group(2)
         sub_building_data.append(sub_building)
         # HOME
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
@@ -294,11 +338,25 @@ if init():
     codes = pd_data['행정구역코드'].str[:5]
     codes = codes.drop_duplicates()
     for i, code in codes.iteritems():
-        for j in range(3):
+        for j in range(6):      # 최근 6개월간 데이터 수집
             now_delta = now + dateutil.relativedelta.relativedelta(months=-j)
             getActualPrice(apt_data, now_delta.year, now_delta.month, code, key)
-    apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
 
+    # '건축년도' 데이터 처리
+    pd_data.insert(6, '건축년도', None)
+    for i in range(len(pd_data)):
+        if pd_data['건축년도'].iloc[i] is None:
+            temp_dong = pd_data['법정동'].iloc[i]
+            temp_jibun = pd_data['지번'].iloc[i]
+            built_years = apt_data['건축년도'].loc[(apt_data['법정동'] == temp_dong) & (apt_data['지번'] == temp_jibun)]
+            if len(built_years) > 0:
+                built_years = built_years.drop_duplicates()
+                built_year = to_str(built_years.iloc[0]).replace("'", '')
+                pd_data['건축년도'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = built_year
+
+    # Checking final results
+    apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
+    pd_data.to_csv('auctionData.csv', index=False, sep=';', encoding='utf-8')
     print (pd_data)
     print (apt_data)
 
