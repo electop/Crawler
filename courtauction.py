@@ -21,7 +21,7 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 # the value of pandas to string
 def to_str(var):
-    return str(list(np.reshape(np.asarray(var), (1, np.size(var)))[0]))[1:-1]
+    return str(list(np.reshape(np.asarray(var), (1, np.size(var)))[0]))[1:-1].replace("'", '')
 
 # Finding index of new address
 def find_index(jibun, text):
@@ -262,8 +262,6 @@ if init():
         juso = get_juso(index, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
         # '법정동'
         #dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
-        #if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
-        #else: dong_name_data.append(None)
         dong_name = re.search(re_dong_name, juso)
         if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
         else: dong_name_data.append(None)
@@ -276,17 +274,14 @@ if init():
         else: building_name_data.append(None)
         # '행정구역코드'
         #area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #area_data.append(area)
         area = re.search(re_area, juso).group(2)
         area_data.append(area)
         # '도로명코드'
         #road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #road_data.append(road)
         road = re.search(re_road, juso).group(2)
         road_data.append(road)
         # '지하여부'
         #underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #underground_data.append(underground)
         underground = re.search(re_underground, juso).group(2)
         underground_data.append(underground)
         # '지번'
@@ -296,12 +291,10 @@ if init():
         jibun_data.append(jibun)
         # '건물본번'
         #building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #building_data.append(building)
         building = re.search(re_building, juso).group(2)
         building_data.append(building)
         # '건물부번'
         #sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #sub_building_data.append(sub_building)
         sub_building = re.search(re_sub_building, juso).group(2)
         sub_building_data.append(sub_building)
         # HOME
@@ -353,6 +346,24 @@ if init():
                 built_years = built_years.drop_duplicates()
                 built_year = to_str(built_years.iloc[0]).replace("'", '')
                 pd_data['건축년도'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = built_year
+
+    # '전용면적' 데이터 처리
+    pd_data.insert(10, '전용면적(국토부)', None)
+    for i in range(len(pd_data)):
+        if pd_data['전용면적(국토부)'].iloc[i] is None:
+            temp_dong = pd_data['법정동'].iloc[i]
+            temp_jibun = pd_data['지번'].iloc[i]
+            area_data = apt_data['전용면적'].loc[(apt_data['법정동'] == temp_dong) & (apt_data['지번'] == temp_jibun)]
+            if len(area_data) > 0:
+                area_data = area_data.drop_duplicates()
+                print ('*****\n', area_data)
+                old_area = float(to_str(pd_data['전용면적'].iloc[i]))
+                for j in range(len(area_data)):
+                    new_area = float(to_str(area_data.iloc[j]))
+                    gap = abs(old_area - new_area)
+                    print ('old:', old_area, ', new:', new_area, ', gap:', gap)
+                    if gap < 1:
+                        pd_data['전용면적(국토부)'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = new_area
 
     # Checking final results
     apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
