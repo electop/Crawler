@@ -38,11 +38,51 @@ def get_juso(index, text):
     if index > 0: return re.split(r'[ ](?=<juso>)', text)[index]
     else: return text
 
+# 부동산써브 > 취득세 계산기
+# http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp
+def getTax(driver, cost, area):
+    cost = int(cost) / 10000
+    #print (type(cost), cost, type(area), area)
+    driver.find_element_by_xpath('//*[@id="price1"]').click()                                              # 취득가액 선택
+    driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.CONTROL, 'a')
+    driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.DELETE)
+    driver.find_element_by_xpath('//*[@id="price1"]').send_keys(str(cost))                                 # 취득가액 입력 (만원)
+    if float(area) <= 85: driver.find_element_by_xpath('//*[@id="space"]').send_keys('전용면적 85㎡ 이하')    # 주택규모
+    else: driver.find_element_by_xpath('//*[@id="space"]').send_keys('전용면적 85㎡ 초과')
+    driver.find_element_by_xpath('//*[@id="svPopupWrap"]/div[2]/form/div[2]/a').click()                    # 계산하기
+    tax = driver.find_element_by_xpath('//*[@id="result6"]').text[:-1].replace(',','')
+
+    return tax
+
+# 경매비용 (매각수수료+감정수수료)
+def getAuctionCost(cost):
+    cost = int(cost)
+    # 매각수수료 계산
+    if (cost <= 10000000): auctionCost = cost*0.02+5000
+    elif (cost > 10000000 and cost <= 50000000): auctionCost = (cost - 10000000) * 0.015 + 203000
+    elif (cost > 50000000 and cost <= 100000000): auctionCost = (cost - 50000000) * 0.01 + 803000
+    elif (cost > 100000000 and cost <= 300000000): auctionCost = (cost - 100000000) * 0.005 + 1303000
+    elif (cost > 300000000 and cost <= 500000000): auctionCost = (cost - 300000000) * 0.003 + 2303000
+    elif (cost > 500000000 and cost <= 1000000000): auctionCost = (cost - 500000000) * 0.002 + 2903000
+    elif (cost > 1000000000): auctionCost = 3903000
+
+    # 감정수수료 계산
+    if (cost <= 50000000): auctionCost += 150000;
+    elif (cost > 50000000 and cost <= 500000000): auctionCost += (cost * 0.0011 + 95000 ) * 0.8
+    elif (cost > 500000000 and cost <= 1000000000): auctionCost += (cost * 0.0009 + 195000) * 0.8
+    elif (cost > 1000000000 and cost <= 5000000000): auctionCost += (cost * 0.0008 + 295000) * 0.8
+    elif (cost > 5000000000 and cost <= 10000000000): auctionCost += (cost * 0.0007 + 795000) * 0.8
+    elif (cost > 10000000000 and cost <= 50000000000): auctionCost += (cost * 0.0006 + 1795000) * 0.8
+    elif (cost > 50000000000 and cost <= 100000000000): auctionCost += (cost * 0.0005 + 6795000) * 0.8
+    elif (cost > 100000000000): auctionCost += (cost * 0.0004 + 16795000) * 0.8
+
+    return auctionCost
+
 # 실행 초기화
 def init():
     args = sys.argv[0:]
     optionLen = len(args)
-    global user, password, host, port, key, structure, table_name
+    global user, password, host, port, key, structure, auction_name, cost_name
 
     if (len(args) <= 1):
         print('[ERR] There is no option')
@@ -64,10 +104,12 @@ def init():
             key = data
         elif args[i].lower() == '--structure':	# --structure : structure name (e.g.: wordpress)
             structure = data
-        elif args[i].lower() == '--table':	    # --table : table name (e.g.: wp_custom_xxx)
-            table_name = data
+        elif args[i].lower() == '--auction':	    # --auction : auction table name (e.g.: wp_custom_xxx)
+            auction_name = data
+        elif args[i].lower() == '--cost':	    # --cost : cost table name (e.g.: wp_custom_xxx)
+            cost_name = data
 
-    if (password == '') or (host == '') or (port == '') or (key == '') or (structure == '') or (table_name == ''):
+    if (password == '') or (host == '') or (port == '') or (key == '') or (structure == '') or (auction_name == '') or (cost_name == ''):
         print('[ERR] Please input all required data like user, password, host, port, key, structure and table name.')
         return False
 
@@ -75,18 +117,18 @@ def init():
 
 # 공공데이터포털 > 국토교통부 실거래가 정보 > 아파트매매 실거래 상세자료
 # https://www.data.go.kr/dataset/3050988/openapi.do
-def getActualPrice(apt_data, year, month, code, key):
+def getActualPrice(driver, apt_data, year, month, code, key):
     date = str(year)
     if month < 10: date += '0' + str(month)
     else: date += str(month)
     url = 'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTrade'
     url += '?&LAWD_CD=' + code + '&DEAL_YMD=' + date + '&serviceKey=' + key
 
-    options = webdriver.ChromeOptions()
-    options.add_argument('window-size=1920x1080')
-    options.add_argument("disable-gpu")
+    #options = webdriver.ChromeOptions()
+    #options.add_argument('window-size=1920x1080')
+    #options.add_argument("disable-gpu")
 
-    driver = webdriver.Chrome('../driver/chromedriver', options=options)
+    #driver = webdriver.Chrome('../driver/chromedriver', options=options)
     driver.get(url)
     
     # Beautiful Soup
@@ -110,7 +152,7 @@ def getActualPrice(apt_data, year, month, code, key):
         item_data.append(apt.find('층').text.strip())
         apt_data.loc[len(apt_data)] = item_data
 
-    driver.close()
+    #driver.close()
     return apt_data
 
 # information for DB
@@ -300,8 +342,6 @@ if init():
         # HOME
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
 
-    driver.close()
-
     pd_data.insert(2, '소재지(도로명)', new_address_data)
     pd_data.insert(4, '법정동', dong_name_data)
     pd_data.insert(5, '아파트', building_name_data)
@@ -333,7 +373,7 @@ if init():
     for i, code in codes.iteritems():
         for j in range(6):      # 최근 6개월간 데이터 수집
             now_delta = now + dateutil.relativedelta.relativedelta(months=-j)
-            getActualPrice(apt_data, now_delta.year, now_delta.month, code, key)
+            getActualPrice(driver, apt_data, now_delta.year, now_delta.month, code, key)
 
     # '건축년도' 데이터 처리
     pd_data.insert(6, '건축년도', None)
@@ -381,6 +421,25 @@ if init():
             pd_data['실거래최저가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_low
             pd_data['실거래수'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_number
 
+    # '취득세' 데이터 처리
+    pd_data.insert(23, '취득세', None)
+    pd_data.insert(24, '경매비용', None)
+    url = 'http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp'
+    driver.get(url)
+    for i in range(len(pd_data)):
+        temp_high = pd_data['감정가'].iloc[i]
+        temp_low = re.sub(r'[가-힣a-zA-Z]+', '', to_str(pd_data['최저가'].iloc[i])).replace("'", '')
+        if len(temp_low) > 0: temp_cost = temp_low
+        else: temp_cost = temp_high
+        temp_area = pd_data['전용면적'].iloc[i]
+        temp_area_public = re.sub(r'[A-Za-z]+', '', to_str(pd_data['전용면적(국토부)'].iloc[i]))
+        if len(temp_area_public) > 0: temp_area = temp_area_public
+        pd_data['취득세'].iloc[i] = getTax(driver, temp_cost, temp_area)
+        pd_data['경매비용'].iloc[i] = getAuctionCost(temp_cost)
+
+    # Closing chrome browser
+    driver.close()
+
     # Checking final results
     apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
     pd_data.to_csv('auctionData.csv', index=False, sep=';', encoding='utf-8')
@@ -392,7 +451,8 @@ if init():
         engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+':'+port+'/'+structure, encoding='utf-8')
 
         # Entering data into the DB
-        pd_data.to_sql(name=table_name, con=engine, if_exists = 'replace')
+        pd_data.to_sql(name=auction_name, con=engine, if_exists = 'replace')
+        apt_data.to_sql(name=cost_name, con=engine, if_exists = 'replace')
         print('[OK] Execution success')
 
     # Exception for the DB connection
