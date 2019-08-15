@@ -194,10 +194,10 @@ if init():
 
     # '감정가','최저가' 데이터 처리
     temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
-    appraisalPrice = temp_data[0].str.strip()                   # 감정가
-    minPrice = temp_data[1].str.strip()                         # 최저가
+    appraisalPrice = temp_data[0].str.replace(',', '').str.strip()     # 감정가
+    minPrice = temp_data[1].str.replace(',', '').str.strip()           # 최저가
     pd_data['감정가'] = appraisalPrice
-    pd_data.insert(4, '최저가', minPrice)                        # 4th index에 column 추가
+    pd_data.insert(4, '최저가', minPrice)
     #print (pd_data['감정가'])
     #print (pd_data['최저가'])
 
@@ -220,12 +220,12 @@ if init():
         if ho_data: ho.append(ho_data.group(0))
         else: ho.append(None)
     pd_data['소재지'] = temp_data[0].str.replace(r'([0-9]+(번지|층))', '').str.replace(r'[ ]+', ' ').str.strip()     # 소재지
-    pd_data.insert(3, '층수', floor)                                                                               # 3rd index에 column 추가
-    pd_data.insert(4, '동', dong)                                                                                 # 4th index에 column 추가
-    pd_data.insert(5, '호', ho)                                                                                   # 5th index에 column 추가
-    pd_data.insert(6, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())                 # 6th index에 column 추가
-    pd_data.insert(7, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())                 # 7th index에 column 추가
-    pd_data.insert(8, '특수조건', temp_data[3].str.replace(']','').str.strip())                                     # 8th index에 column 추가
+    pd_data.insert(3, '층수', floor)
+    pd_data.insert(4, '동', dong)
+    pd_data.insert(5, '호', ho)
+    pd_data.insert(6, '건물', temp_data[1].str.replace('건물 ','').str.replace(']','').str.strip())
+    pd_data.insert(7, '토지', temp_data[2].str.replace('토지 ','').str.replace(']','').str.strip())
+    pd_data.insert(8, '특수조건', temp_data[3].str.replace(']','').str.strip())
 
     # '소재지(도로명)', '행정구역코드', '도로명코드' 데이터 처리
     area_data, road_data, underground_data, new_address_data, building_data = [], [], [], [], []
@@ -350,20 +350,36 @@ if init():
     # '전용면적' 데이터 처리
     pd_data.insert(10, '전용면적(국토부)', None)
     for i in range(len(pd_data)):
-        if pd_data['전용면적(국토부)'].iloc[i] is None:
-            temp_dong = pd_data['법정동'].iloc[i]
-            temp_jibun = pd_data['지번'].iloc[i]
-            area_data = apt_data['전용면적'].loc[(apt_data['법정동'] == temp_dong) & (apt_data['지번'] == temp_jibun)]
-            if len(area_data) > 0:
-                area_data = area_data.drop_duplicates()
-                print ('*****\n', area_data)
-                old_area = float(to_str(pd_data['전용면적'].iloc[i]))
-                for j in range(len(area_data)):
-                    new_area = float(to_str(area_data.iloc[j]))
-                    gap = abs(old_area - new_area)
-                    print ('old:', old_area, ', new:', new_area, ', gap:', gap)
-                    if gap < 1:
-                        pd_data['전용면적(국토부)'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = new_area
+        temp_dong = pd_data['법정동'].iloc[i]
+        temp_jibun = pd_data['지번'].iloc[i]
+        area_data = apt_data['전용면적'].loc[(apt_data['법정동'] == temp_dong) & (apt_data['지번'] == temp_jibun)]
+        if len(area_data) > 0:
+            area_data = area_data.drop_duplicates()
+            old_area = float(to_str(pd_data['전용면적'].iloc[i]))
+            for j in range(len(area_data)):
+                new_area = float(to_str(area_data.iloc[j]))
+                gap = abs(old_area - new_area)
+                if gap < 1: pd_data['전용면적(국토부)'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = new_area
+
+    # '실거래최고가', '실거래평균가', '실거래최저가', '실거래수' 데이터 처리
+    pd_data.insert(23, '실거래최고가', None)
+    pd_data.insert(24, '실거래평균가', None)
+    pd_data.insert(25, '실거래최저가', None)
+    pd_data.insert(26, '실거래수', None)
+    for i in range(len(pd_data)):
+        temp_dong = pd_data['법정동'].iloc[i]
+        temp_jibun = pd_data['지번'].iloc[i]
+        temp_area = pd_data['전용면적(국토부)'].iloc[i]
+        price_data = pd.to_numeric(apt_data['거래금액'].loc[(apt_data['법정동'] == temp_dong) & (apt_data['지번'] == temp_jibun) & (apt_data['전용면적'] == str(temp_area))].str.replace(',',''))
+        if len(price_data) > 0:
+            price_high = price_data.max()*10000
+            price_average = price_data.mean().round(1)*10000
+            price_low = price_data.min()*10000
+            price_number = len(price_data)
+            pd_data['실거래최고가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_high
+            pd_data['실거래평균가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_average
+            pd_data['실거래최저가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_low
+            pd_data['실거래수'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_number
 
     # Checking final results
     apt_data.to_csv('actualPrice.csv', index=False, sep=';', encoding='utf-8')
