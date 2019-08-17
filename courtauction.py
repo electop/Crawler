@@ -56,9 +56,9 @@ def getTax(driver, cost, area):
 
 # 경매비용 (매각수수료+감정수수료)
 def getAuctionCost(cost):
-    cost = int(cost)
+    cost = float(cost)
     # 매각수수료 계산
-    if (cost <= 10000000): auctionCost = cost*0.02+5000
+    if (cost <= 10000000): auctionCost = cost * 0.02 + 5000
     elif (cost > 10000000 and cost <= 50000000): auctionCost = (cost - 10000000) * 0.015 + 203000
     elif (cost > 50000000 and cost <= 100000000): auctionCost = (cost - 50000000) * 0.01 + 803000
     elif (cost > 100000000 and cost <= 300000000): auctionCost = (cost - 100000000) * 0.005 + 1303000
@@ -76,7 +76,73 @@ def getAuctionCost(cost):
     elif (cost > 50000000000 and cost <= 100000000000): auctionCost += (cost * 0.0005 + 6795000) * 0.8
     elif (cost > 100000000000): auctionCost += (cost * 0.0004 + 16795000) * 0.8
 
-    return auctionCost
+    return round(auctionCost)
+
+# 하우스인포 > 법원경매 > 낙찰통계 > 낙찰가율(%)
+# http://www.houseinfo.co.kr/sub.html?menu=14
+def getAuctionRatio(driver, cost, type):
+    # 낙찰통계 > 관할법원
+    driver.find_element_by_name('i_bub_cd1').send_keys('수원')
+    driver.find_element_by_name('i_bub_cd2').send_keys('수원지방법원')
+    # 낙찰통계 > 감정가 선택
+    if cost > 1000000000:
+        driver.find_element_by_name('i_money_value').send_keys('10억원 이상')
+    elif 500000000 <= cost and cost < 1000000000:
+        driver.find_element_by_name('i_money_value').send_keys('5억원 이상 ~ 10억원 미만')
+    elif 300000000 <= cost and cost < 500000000:
+        driver.find_element_by_name('i_money_value').send_keys('3억원 이상 ~ 5억원 미만')
+    elif 100000000 <= cost and cost < 300000000:
+        driver.find_element_by_name('i_money_value').send_keys('1억원 이상 ~ 3억원 미만')
+    elif 50000000 <= cost and cost < 100000000:
+        driver.find_element_by_name('i_money_value').send_keys('5,000만원 이상 ~ 1억원 미만')
+    elif 30000000 <= cost and cost < 50000000:
+        driver.find_element_by_name('i_money_value').send_keys('3,000만원 이상 ~ 5,000만원 미만')
+    elif 10000000 <= cost and cost < 30000000:
+        driver.find_element_by_name('i_money_value').send_keys('1,000만원 이상 ~ 3,000만원 미만')
+    elif cost < 10000000:
+        driver.find_element_by_name('i_money_value').send_keys('1,000만원 미만')
+    # 낙찰통계 > 검색
+    driver.find_element_by_xpath('//*[@id="idPrint"]/table/tbody/tr[2]/td/table/tbody/tr/td/table/tbody/tr/td/table[2]/tbody/tr/td/img[2]').click()
+    # 낙찰가율
+    if type == '아파트':
+        auctionRatio = driver.find_element_by_xpath('//*[@id="idPrint"]/table/tbody/tr[8]/td/table/tbody/tr[1]/td[2] ').text[:-1].replace(',','')
+    elif type == '주택':
+        auctionRatio = driver.find_element_by_xpath('//*[@id="idPrint"]/table/tbody/tr[8]/td/table/tbody/tr[1]/td[4]').text[:-1].replace(',','')
+    elif type == '오피스텔':
+        tempLivingRatio = driver.find_element_by_xpath('//*[@id="idPrint"]/table/tbody/tr[8]/td/table/tbody/tr[2]/td[6]').text[:-1].replace(',','')
+        tempOfficeRatio = driver.find_element_by_xpath('//*[@id="idPrint"]/table/tbody/tr[8]/td/table/tbody/tr[5]/td[2]').text[:-1].replace(',','')
+        auctionRatio = (float(tempLivingRatio) + float(tempOfficeRatio)) / 2
+    
+    return auctionRatio
+
+# 보물섬경매 > 지역분석 및 도로현황 > 감정평가요항표, 주의사항/법원문건접수 요약
+def getHumint(driver, incident):
+    info_data = []
+    # 사건번호 검색
+    driver.find_element_by_xpath('//*[@id="search_txt"]').click()
+    driver.find_element_by_xpath('//*[@id="search_txt"]').send_keys(incident)
+    driver.find_element_by_xpath('//*[@id="s_srch_frm"]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div').click()
+    # 경매정보 상세 페이지 이동
+    driver.find_element_by_xpath('//*[@id="kyg_list_table"]/tbody/tr[3]/td[4]/div/span[3]').click()
+    # '감정평가요항표' 데이터 취득
+    temp_info = ''
+    temp_elements = driver.find_elements_by_xpath('//*[@id="land_rgst_info"]/table/tbody/tr/td')
+    for temp_element in temp_elements:
+        if '감정평가요항표 ]' in temp_element.text:
+            temp_info = temp_element.text
+            break
+    if temp_info is '': info_data.append('')
+    else: info_data.append(temp_info)
+    # '주의사항/법원문건접수
+    temp_elements = driver.find_elements_by_xpath('//*[@id="tenant_info"]/table/tbody/tr[3]/td')
+    for temp_element in temp_elements:
+        if '[ 주의사항 / 법원문건접수 요약 ]' in temp_element.text:
+            temp_info = temp_element.text
+            break
+    if temp_info is '': info_data.append('')
+    else: info_data.append(temp_info)
+    
+    return info_data
 
 # 실행 초기화
 def init():
@@ -236,8 +302,9 @@ if init():
 
     # '감정가','최저가' 데이터 처리
     temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
-    appraisalPrice = temp_data[0].str.replace(',', '').str.strip()     # 감정가
-    minPrice = temp_data[1].str.replace(',', '').str.strip()           # 최저가
+    appraisalPrice = temp_data[0].str.replace(',', '').str.strip()                                                #감정가
+    minPrice = temp_data[1].str.strip().str.replace(',', '').str.replace('취하', '').str.replace('변경', '')        #최저가
+    minprice = minPrice.replace('', np.nan, inplace=True)
     pd_data['감정가'] = appraisalPrice
     pd_data.insert(4, '최저가', minPrice)
     #print (pd_data['감정가'])
@@ -421,21 +488,52 @@ if init():
             pd_data['실거래최저가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_low
             pd_data['실거래수'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_number
 
-    # '취득세' 데이터 처리
-    pd_data.insert(23, '취득세', None)
-    pd_data.insert(24, '경매비용', None)
-    url = 'http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp'
+    # '낙찰가율' 데이터 처리
+    pd_data.insert(23, '낙찰가율', None)
+    url = 'http://www.houseinfo.co.kr/sub.html?menu=14'
     driver.get(url)
     for i in range(len(pd_data)):
         temp_high = pd_data['감정가'].iloc[i]
         temp_low = re.sub(r'[가-힣a-zA-Z]+', '', to_str(pd_data['최저가'].iloc[i])).replace("'", '')
         if len(temp_low) > 0: temp_cost = temp_low
         else: temp_cost = temp_high
+        pd_data['낙찰가율'].iloc[i] = getAuctionRatio(driver, int(temp_cost), pd_data['용도'].iloc[i])
+
+    # '기대수익', '예상비용', '취득세', '경매비용' 데이터 처리
+    pd_data.insert(24, '기대수익', None)
+    pd_data.insert(25, '예상비용', None)
+    pd_data.insert(26, '취득세', None)
+    pd_data.insert(27, '경매비용', None)
+    url = 'http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp'
+    driver.get(url)
+    for i in range(len(pd_data)):
+        # '전용면적' 확인
         temp_area = pd_data['전용면적'].iloc[i]
         temp_area_public = re.sub(r'[A-Za-z]+', '', to_str(pd_data['전용면적(국토부)'].iloc[i]))
         if len(temp_area_public) > 0: temp_area = temp_area_public
-        pd_data['취득세'].iloc[i] = getTax(driver, temp_cost, temp_area)
-        pd_data['경매비용'].iloc[i] = getAuctionCost(temp_cost)
+        # 예상구매가 확인
+        temp_price = round(float(pd_data['감정가'].iloc[i]) * float(pd_data['낙찰가율'].iloc[i]) / 100)
+        # 취득세
+        temp_tax = getTax(driver, temp_price, temp_area)
+        # 경매비용
+        temp_auction_cost = getAuctionCost(temp_price)
+        # 예상비용 (예상구매가 + 취득세 + 경매비용)
+        temp_cost = float(temp_price) + float(temp_tax) + float(temp_auction_cost)
+        # 데이터 입력
+        if pd_data['실거래평균가'].iloc[i] is not None: pd_data['기대수익'].iloc[i] = str(float(pd_data['실거래평균가'].iloc[i]) - temp_cost)
+        pd_data['예상비용'].iloc[i] = str(temp_cost)
+        pd_data['취득세'].iloc[i] = temp_tax
+        pd_data['경매비용'].iloc[i] = temp_auction_cost
+
+    # '구분건물감정평가요항표', '주의사항/법원문건접수' 데이터 처리
+    pd_data.insert(36, '구분건물감정평가요항표', None)
+    pd_data.insert(37, '주의사항/법원문건접수', None)
+    url = 'http://hese.co.kr/index.php'
+    driver.get(url)
+    for i in range(len(pd_data)):
+        info = getHumint(driver, pd_data['사건번호'].iloc[i])
+        if len(info) > 0: pd_data['구분건물감정평가요항표'].iloc[i] = info[0]
+        if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1]
 
     # Closing chrome browser
     driver.close()
