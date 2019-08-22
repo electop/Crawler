@@ -3,9 +3,9 @@
     python --version
     Python 3.7.3
   #### Chrome driver
-    > https://chromedriver.chromium.org/downloads
-      ../driver/chromedriver
-      ../driver/phantomjs
+  > https://chromedriver.chromium.org/downloads
+    ../driver/chromedriver
+    ../driver/phantomjs
   #### Library
     import re
     import math
