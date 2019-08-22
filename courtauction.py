@@ -237,6 +237,12 @@ if init():
     driver.get('http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1')
     driver.find_element_by_name('sido').send_keys('경기')
     driver.find_element_by_name('gugun').send_keys('수원시')
+    now = datetime.datetime.now()
+    now_delta = now + dateutil.relativedelta.relativedelta(months=-2, days=+1)
+    MonthsAgo = str(now_delta.year) + '.' + '%02d' % (now_delta.month) + '.' + '%02d' % (now_delta.day)
+    driver.find_element_by_name('s_date_from').click()
+    driver.find_element_by_name('s_date_from').send_keys(MonthsAgo)
+
     driver.find_element_by_xpath('//*[@id="rltyct1"]').click()  # 아파트
     driver.find_element_by_xpath('//*[@id="rltyct2"]').click()  # 주택
     driver.find_element_by_xpath('//*[@id="rltyct7"]').click()  # 오피스텔
@@ -300,15 +306,20 @@ if init():
     # '매각기일' 데이터 처리
     pd_data['매각기일'] = pd_data['매각기일'].str.split(' ', n=0, expand=True)[0].str.strip()
 
-    # '감정가','최저가' 데이터 처리
+    # '감정가','최저가', '낙찰가' 데이터 처리
     temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
-    appraisalPrice = temp_data[0].str.replace(',', '').str.strip()                                                #감정가
-    minPrice = temp_data[1].str.strip().str.replace(',', '').str.replace('취하', '').str.replace('변경', '')        #최저가
+    appraisalPrice = temp_data[0].str.replace(',', '').str.strip()
+    minPrice = temp_data[1].str.strip().str.replace(',', '').str.replace('취하', '').str.replace('변경', '').str.replace('기각', '')
     minprice = minPrice.replace('', np.nan, inplace=True)
+    realPrice = ''
+    if len(temp_data) > 2: realPrice = temp_data[2].str.strip().str.replace(',', '')
     pd_data['감정가'] = appraisalPrice
     pd_data.insert(4, '최저가', minPrice)
+    pd_data.insert(5, '낙찰가', realPrice)
+
     #print (pd_data['감정가'])
     #print (pd_data['최저가'])
+    #print (pd_data['낙찰가'])
 
     # '소재지', '층수', '동', '호' 데이터 처리
     ho = []
@@ -348,7 +359,7 @@ if init():
     re_sub_building = re.compile(r'(<buldSlno>)([0-9]+)')
     re_building_name = re.compile(r'(<bdNm>)([가-힣0-9. ]+)')
     re_dong_name = re.compile(r'(<emdNm>)([가-힣0-9]+)')
-    re_address = re.compile(r'(^.+[가-힣]+([동]|[로0-9번길])\s)[0-9\-]+')
+    re_address = re.compile(r'^[가-힣\s]+([동]|[리]|[로0-9번길])\s([0-9\-]+)')
     driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
 
     for i in range(len(pd_data)):
@@ -419,11 +430,11 @@ if init():
     pd_data.insert(16, '건물본번', building_data)
     pd_data.insert(17, '건물부번', sub_building_data)
 
-    # '상태' 데이터 처리
+    # '상태', '최저가율' 데이터 처리
     temp_data = pd_data['상태'].str.split(' ', n=0, expand=True)
     pd_data['상태'] = temp_data[0].str.strip()
     pd_data.insert(21, '최저가율', temp_data[1].str.strip())
-
+    
     # '전용면적' 데이터 처리
     dedicated_area_data = []
     temp_data = pd_data['건물'].str.replace('평', '').str.replace(',', '').astype(float)
@@ -468,11 +479,11 @@ if init():
                 gap = abs(old_area - new_area)
                 if gap < 1: pd_data['전용면적(국토부)'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun)] = new_area
 
-    # '실거래최고가', '실거래평균가', '실거래최저가', '실거래수' 데이터 처리
-    pd_data.insert(23, '실거래최고가', None)
-    pd_data.insert(24, '실거래평균가', None)
-    pd_data.insert(25, '실거래최저가', None)
-    pd_data.insert(26, '실거래수', None)
+    # '실거래최고가', '실거래평균가', '실거래최저가', '실거래수(최근6개월)' 데이터 처리
+    pd_data.insert(25, '실거래최고가', None)
+    pd_data.insert(26, '실거래평균가', None)
+    pd_data.insert(27, '실거래최저가', None)
+    pd_data.insert(28, '실거래수(최근6개월)', None)
     for i in range(len(pd_data)):
         temp_dong = pd_data['법정동'].iloc[i]
         temp_jibun = pd_data['지번'].iloc[i]
@@ -486,10 +497,10 @@ if init():
             pd_data['실거래최고가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_high
             pd_data['실거래평균가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_average
             pd_data['실거래최저가'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_low
-            pd_data['실거래수'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_number
+            pd_data['실거래수(최근6개월)'].loc[(pd_data['법정동'] == temp_dong) & (pd_data['지번'] == temp_jibun) & (pd_data['전용면적(국토부)'] == temp_area)] = price_number
 
-    # '낙찰가율' 데이터 처리
-    pd_data.insert(23, '낙찰가율', None)
+    # '낙찰가율(최근1년)' 데이터 처리
+    pd_data.insert(25, '낙찰가율(최근1년)', None)
     url = 'http://www.houseinfo.co.kr/sub.html?menu=14'
     driver.get(url)
     for i in range(len(pd_data)):
@@ -497,13 +508,14 @@ if init():
         temp_low = re.sub(r'[가-힣a-zA-Z]+', '', to_str(pd_data['최저가'].iloc[i])).replace("'", '')
         if len(temp_low) > 0: temp_cost = temp_low
         else: temp_cost = temp_high
-        pd_data['낙찰가율'].iloc[i] = getAuctionRatio(driver, int(temp_cost), pd_data['용도'].iloc[i])
+        pd_data['낙찰가율(최근1년)'].iloc[i] = getAuctionRatio(driver, int(temp_cost), pd_data['용도'].iloc[i])
 
-    # '기대수익', '예상비용', '취득세', '경매비용' 데이터 처리
-    pd_data.insert(24, '기대수익', None)
-    pd_data.insert(25, '예상비용', None)
-    pd_data.insert(26, '취득세', None)
-    pd_data.insert(27, '경매비용', None)
+    # '낙찰가율', '기대수익', '예상비용', '취득세', '경매비용' 데이터 처리
+    pd_data.insert(25, '낙찰가율', None)
+    pd_data.insert(27, '기대수익', None)
+    pd_data.insert(28, '예상비용', None)
+    pd_data.insert(29, '취득세', None)
+    pd_data.insert(30, '경매비용', None)
     url = 'http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp'
     driver.get(url)
     for i in range(len(pd_data)):
@@ -512,7 +524,10 @@ if init():
         temp_area_public = re.sub(r'[A-Za-z]+', '', to_str(pd_data['전용면적(국토부)'].iloc[i]))
         if len(temp_area_public) > 0: temp_area = temp_area_public
         # 예상구매가 확인
-        temp_price = round(float(pd_data['감정가'].iloc[i]) * float(pd_data['낙찰가율'].iloc[i]) / 100)
+        if pd_data['낙찰가'].iloc[i] is not None:
+            temp_price = float(pd_data['낙찰가'].iloc[i])
+            pd_data['낙찰가율'].iloc[i] = round((float(temp_price) / float(pd_data['감정가'].iloc[i])) * 100, 2)
+        else: temp_price = round(float(pd_data['감정가'].iloc[i]) * float(pd_data['낙찰가율(최근1년)'].iloc[i]) / 100)
         # 취득세
         temp_tax = getTax(driver, temp_price, temp_area)
         # 경매비용
@@ -525,15 +540,15 @@ if init():
         pd_data['취득세'].iloc[i] = temp_tax
         pd_data['경매비용'].iloc[i] = temp_auction_cost
 
-    # '구분건물감정평가요항표', '주의사항/법원문건접수' 데이터 처리
-    pd_data.insert(36, '구분건물감정평가요항표', None)
-    pd_data.insert(37, '주의사항/법원문건접수', None)
+    # '주의사항/법원문건접수', '감정평가요항표' 데이터 처리
+    pd_data.insert(36, '주의사항/법원문건접수', None)
+    pd_data.insert(37, '감정평가요항표', None)
     url = 'http://hese.co.kr/index.php'
     driver.get(url)
     for i in range(len(pd_data)):
         info = getHumint(driver, pd_data['사건번호'].iloc[i])
-        if len(info) > 0: pd_data['구분건물감정평가요항표'].iloc[i] = info[0]
-        if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1]
+        if len(info) > 0: pd_data['감정평가요항표'].iloc[i] = info[0]
+        if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1][20:]
 
     # Closing chrome browser
     driver.close()
