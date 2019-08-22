@@ -1,16 +1,16 @@
 ## Prerequites
-  ### Python
+  #### Python
     ```
     python --version
     Python 3.7.3
     ```
-  ### Chrome driver
+  #### Chrome driver
     > https://chromedriver.chromium.org/downloads
     ```
     ../driver/chromedriver
     ../driver/phantomjs
     ```
-  ### Library
+  #### Library
     ```
     import re
     import math
@@ -29,13 +29,13 @@
     from mysql.connector import errorcode
     ```
 ## Crawler
-> https://tariat.tistory.com/100
+  > https://tariat.tistory.com/100
 
 ## How to use
   ```
   python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx --key 'xxxx' --structure xxxx --auction xxxx --cost xxxx
   ```
-  ### Help for options
+  #### Help for options
     ```
     --user : user name of MySQL (e.g.: root)
     --password : password of username
