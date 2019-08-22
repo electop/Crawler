@@ -155,7 +155,7 @@ def init():
         return False
 
     # Command
-    # python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx --key 'xxxx'
+    # python main.py --user xxxx --password 'xxxx' --host 'xx.xx.xx.xx' --port xxxx --structure xxxx --table xxxx --key 'xxxx' --structure xxxx --auction xxxx --cost xxxx
     for i in range(optionLen-1):
         data = str(args[i+1])
         if args[i].lower() == '--user':		    # --user : user name of MySQL (e.g.: root)
