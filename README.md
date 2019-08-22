@@ -3,6 +3,9 @@
 
 ## Prerequites
 >
+### Python 3.7.3
+### Chrome driver : ../driver/chromedriver, ../driver/phantomjs
+### Library
 ```
 import re
 import math
