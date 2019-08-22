@@ -4,8 +4,10 @@
     Python 3.7.3
   #### Chrome driver
   > https://chromedriver.chromium.org/downloads
-    ../driver/chromedriver
-    ../driver/phantomjs
+  ```
+  ../driver/chromedriver
+  ../driver/phantomjs
+  ```
   #### Library
     import re
     import math
