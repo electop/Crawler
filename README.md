@@ -1,10 +1,18 @@
 ## Crawler
 > https://tariat.tistory.com/100
-
 ## Prerequites
 >
-### Python 3.7.3
-### Chrome driver : ../driver/chromedriver, ../driver/phantomjs
+### Python
+```
+python --version
+Python 3.7.3
+```
+### Chrome driver
+> https://chromedriver.chromium.org/downloads
+```
+../driver/chromedriver
+../driver/phantomjs
+```
 ### Library
 ```
 import re
