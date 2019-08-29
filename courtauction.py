@@ -201,13 +201,14 @@ def getActualPrice(driver, apt_data, year, month, code, key):
     xml_file = driver.page_source
     xml_soup = BeautifulSoup(xml_file, 'lxml-xml')
     xml = xml_soup.find_all('item')
-    #apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
+    #apt_data = pd.DataFrame(columns=['년', '월', '일', '거래일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
 
     for apt in xml:
         item_data = []
         item_data.append(apt.find('년').text.strip())
         item_data.append(apt.find('월').text.strip())
         item_data.append(apt.find('일').text.strip())
+        item_data.append(apt.find('년').text.strip() + '.' + apt.find('월').text.strip() + '.' + apt.find('일').text.strip())
         item_data.append(apt.find('거래금액').text.strip())
         item_data.append(apt.find('건축년도').text.strip())
         item_data.append(apt.find('법정동').text.strip())
@@ -305,6 +306,7 @@ if init():
 
     # '매각기일' 데이터 처리
     pd_data['매각기일'] = pd_data['매각기일'].str.split(' ', n=0, expand=True)[0].str.strip()
+    pd_data['매각기일'] = pd.to_datetime(pd_data['매각기일'], format='%Y-%m-%d')
 
     # '감정가','최저가', '낙찰가' 데이터 처리
     temp_data = pd_data['감정가'].str.split(' ', n=0, expand=True)
@@ -433,7 +435,7 @@ if init():
     # '상태', '최저가율' 데이터 처리
     temp_data = pd_data['상태'].str.split(' ', n=0, expand=True)
     pd_data['상태'] = temp_data[0].str.strip()
-    pd_data.insert(21, '최저가율', temp_data[1].str.strip())
+    pd_data.insert(21, '최저가율', temp_data[1].str.strip().str.replace('%', ''))
     
     # '전용면적' 데이터 처리
     dedicated_area_data = []
@@ -445,13 +447,14 @@ if init():
 
     # 실거래가 데이터 수집
     now = datetime.datetime.now()
-    apt_data = pd.DataFrame(columns=['년', '월', '일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
+    apt_data = pd.DataFrame(columns=['년', '월', '일', '거래일', '거래금액', '건축년도', '법정동', '아파트', '전용면적', '지번', '지역코드', '층'])
     codes = pd_data['행정구역코드'].str[:5]
     codes = codes.drop_duplicates()
     for i, code in codes.iteritems():
         for j in range(6):      # 최근 6개월간 데이터 수집
             now_delta = now + dateutil.relativedelta.relativedelta(months=-j)
             getActualPrice(driver, apt_data, now_delta.year, now_delta.month, code, key)
+    apt_data['거래일'] = pd.to_datetime(apt_data['거래일'], format='%Y-%m-%d')
 
     # '건축년도' 데이터 처리
     pd_data.insert(6, '건축년도', None)
@@ -541,8 +544,8 @@ if init():
         pd_data['경매비용'].iloc[i] = temp_auction_cost
 
     # '주의사항/법원문건접수', '감정평가요항표' 데이터 처리
-    pd_data.insert(36, '주의사항/법원문건접수', None)
-    pd_data.insert(37, '감정평가요항표', None)
+    pd_data.insert(38, '주의사항/법원문건접수', None)
+    pd_data.insert(39, '감정평가요항표', None)
     url = 'http://hese.co.kr/index.php'
     driver.get(url)
     for i in range(len(pd_data)):
