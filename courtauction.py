@@ -10,6 +10,9 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchWindowException
+from selenium.common.exceptions import NoSuchElementException
 import sys
 import datetime
 import dateutil.relativedelta
@@ -118,27 +121,31 @@ def getAuctionRatio(driver, cost, type):
 # 보물섬경매 > 지역분석 및 도로현황 > 감정평가요항표, 주의사항/법원문건접수 요약
 def getHumint(driver, incident):
     info_data = []
-    # 사건번호 검색
-    driver.find_element_by_xpath('//*[@id="search_txt"]').click()
-    driver.find_element_by_xpath('//*[@id="search_txt"]').send_keys(incident)
-    driver.find_element_by_xpath('//*[@id="s_srch_frm"]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div').click()
-    # 경매정보 상세 페이지 이동
-    driver.find_element_by_xpath('//*[@id="kyg_list_table"]/tbody/tr[3]/td[4]/div/span[3]').click()
-    # '감정평가요항표' 데이터 취득
     temp_info = ''
-    temp_elements = driver.find_elements_by_xpath('//*[@id="land_rgst_info"]/table/tbody/tr/td')
-    for temp_element in temp_elements:
-        if '감정평가요항표 ]' in temp_element.text:
-            temp_info = temp_element.text
-            break
-    if temp_info is '': info_data.append('')
-    else: info_data.append(temp_info)
-    # '주의사항/법원문건접수
-    temp_elements = driver.find_elements_by_xpath('//*[@id="tenant_info"]/table/tbody/tr[3]/td')
-    for temp_element in temp_elements:
-        if '[ 주의사항 / 법원문건접수 요약 ]' in temp_element.text:
-            temp_info = temp_element.text
-            break
+    try:
+        # 사건번호 검색
+        driver.find_element_by_xpath('//*[@id="search_txt"]').click()
+        driver.find_element_by_xpath('//*[@id="search_txt"]').send_keys(incident)
+        driver.find_element_by_xpath('//*[@id="s_srch_frm"]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div').click()
+        # 경매정보 상세 페이지 이동
+        driver.find_element_by_xpath('//*[@id="kyg_list_table"]/tbody/tr[3]/td[4]/div/span[3]').click()
+        # '감정평가요항표' 데이터 취득
+        temp_elements = driver.find_elements_by_xpath('//*[@id="land_rgst_info"]/table/tbody/tr/td')
+        for temp_element in temp_elements:
+            if '감정평가요항표 ]' in temp_element.text:
+                temp_info = temp_element.text
+                break
+        if temp_info is '': info_data.append('')
+        else: info_data.append(temp_info)
+        # '주의사항/법원문건접수
+        temp_elements = driver.find_elements_by_xpath('//*[@id="tenant_info"]/table/tbody/tr[3]/td')
+        for temp_element in temp_elements:
+            if '[ 주의사항 / 법원문건접수 요약 ]' in temp_element.text:
+                temp_info = temp_element.text
+                break
+    except (TimeoutException, NoSuchElementException, NoSuchWindowException) as e:
+        print ('(%s)' % incident, str(e))
+
     if temp_info is '': info_data.append('')
     else: info_data.append(temp_info)
     
@@ -234,6 +241,7 @@ if init():
     options.add_argument('window-size=1920x1080')
     options.add_argument("disable-gpu")
     driver = webdriver.Chrome('../driver/chromedriver', options=options)
+    driver.set_page_load_timeout(10)
 
     driver.get('http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1')
     driver.find_element_by_name('sido').send_keys('경기')
@@ -361,7 +369,7 @@ if init():
     re_sub_building = re.compile(r'(<buldSlno>)([0-9]+)')
     re_building_name = re.compile(r'(<bdNm>)([가-힣0-9. ]+)')
     re_dong_name = re.compile(r'(<emdNm>)([가-힣0-9]+)')
-    re_address = re.compile(r'^[가-힣\s]+([동]|[리]|[로0-9번길])\s([0-9\-]+)')
+    re_address = re.compile(r'^[가-힣\s]+([동]|[리]|[로]|로[0-9]+번길)\s([0-9\-]+)')
     driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
 
     for i in range(len(pd_data)):
@@ -550,8 +558,15 @@ if init():
     driver.get(url)
     for i in range(len(pd_data)):
         info = getHumint(driver, pd_data['사건번호'].iloc[i])
-        if len(info) > 0: pd_data['감정평가요항표'].iloc[i] = info[0]
-        if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1][20:]
+        #print ('%d, %d' % len(info) % len(info[0]), info)
+        if len(info[0]) is not 0:
+            if len(info) > 0: pd_data['감정평가요항표'].iloc[i] = info[0]
+            if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1][20:]
+        else:
+            driver.close()
+            driver = webdriver.Chrome('../driver/chromedriver', options=options)
+            driver.set_page_load_timeout(5)
+            driver.get(url)
 
     # Closing chrome browser
     driver.close()
