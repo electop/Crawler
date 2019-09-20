@@ -45,7 +45,7 @@ def get_juso(index, text):
 # http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp
 def getTax(driver, cost, area):
     cost = int(cost) / 10000
-    #print (type(cost), cost, type(area), area)
+    print ('cost:%s/%s, area:%s/%s' % (type(cost), cost, type(area), area))
     driver.find_element_by_xpath('//*[@id="price1"]').click()                                              # 취득가액 선택
     driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.CONTROL, 'a')
     driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.DELETE)
@@ -53,8 +53,11 @@ def getTax(driver, cost, area):
     if float(area) <= 85: driver.find_element_by_xpath('//*[@id="space"]').send_keys('전용면적 85㎡ 이하')    # 주택규모
     else: driver.find_element_by_xpath('//*[@id="space"]').send_keys('전용면적 85㎡ 초과')
     driver.find_element_by_xpath('//*[@id="svPopupWrap"]/div[2]/form/div[2]/a').click()                    # 계산하기
-    tax = driver.find_element_by_xpath('//*[@id="result6"]').text[:-1].replace(',','')
-
+    tax = ''
+    while not tax:
+        try:
+            tax = driver.find_element_by_xpath('//*[@id="result6"]').text[:-1].replace(',','')
+        except: continue
     return tax
 
 # 경매비용 (매각수수료+감정수수료)
@@ -144,7 +147,7 @@ def getHumint(driver, incident):
                 temp_info = temp_element.text
                 break
     except (TimeoutException, NoSuchElementException, NoSuchWindowException) as e:
-        print ('(%s)' % incident, str(e))
+        print ('[ERR] Humint (%s)' % incident, str(e))
 
     if temp_info is '': info_data.append('')
     else: info_data.append(temp_info)
@@ -233,6 +236,8 @@ def getActualPrice(driver, apt_data, year, month, code, key):
 user, password, host, port, key= 'user', '', '', '', ''
 structure, table_name = '', ''
 
+TIMEOUT_TIME = 20
+
 if init():
     #driver = webdriver.Chrome('../driver/chromedriver')
     #driver = webdriver.PhantomJS('../driver/phantomjs')
@@ -241,7 +246,7 @@ if init():
     options.add_argument('window-size=1920x1080')
     options.add_argument("disable-gpu")
     driver = webdriver.Chrome('../driver/chromedriver', options=options)
-    driver.set_page_load_timeout(10)
+    driver.set_page_load_timeout(TIMEOUT_TIME)
 
     driver.get('http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1http://www.xn--289a10kw0fb2e5xnhho.com/workdir/upcate/kyg/kyg_srch.php?fcate=kyg&sub_menu_name=%C1%BE%C7%D5%B0%CB%BB%F6&tnm=1')
     driver.find_element_by_name('sido').send_keys('경기')
@@ -370,63 +375,81 @@ if init():
     re_building_name = re.compile(r'(<bdNm>)([가-힣0-9. ]+)')
     re_dong_name = re.compile(r'(<emdNm>)([가-힣0-9]+)')
     re_address = re.compile(r'^[가-힣\s]+([동]|[리]|[로]|로[0-9]+번길)\s([0-9\-]+)')
-    driver.get('http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch')
+    url = 'http://www.juso.go.kr/addrlink/devAddrLinkRequestUse.do?menu=roadSearch'
+    driver.get(url)
 
     for i in range(len(pd_data)):
         address = re.search(re_address, pd_data.loc[i].소재지).group(0)
         jibun = re.search(r'[0-9\-]+$', address).group(0)
-        driver.find_element_by_xpath('//*[@id="keywordRoad"]').click()
-        driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.CONTROL, 'a')
-        driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(address)
-        driver.find_element_by_xpath('//*[@id="formRoadSearch"]/fieldset[1]/div[2]/a').click()                      # 체험하기
-        driver.implicitly_wait(1)
-        driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)        
-        driver.find_element_by_xpath('//*[@id="listRoadSearch"]/p/a').click()                                       # 검색결과형식보기 > 열기
-        index = find_index(jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)               # Getting index
-        if index > 1: index_str = '['+str(index)+']'
-        else: index_str = ''
-        # '소재지(도로명)'
-        new_address = driver.find_element_by_xpath('//*[@id="listRoadSearch"]/table/tbody/tr'+index_str+'/td/p[2]').text
-        new_address_data.append(new_address)
-        # xml <juso> data
-        juso = get_juso(index, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
-        # '법정동'
-        #dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
-        dong_name = re.search(re_dong_name, juso)
-        if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
-        else: dong_name_data.append(None)
-        # '아파트'
-        #building_name = re.search(re_building_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
-        #if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
-        #else: building_name_data.append(None)
-        building_name = re.search(re_building_name, juso)
-        if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
-        else: building_name_data.append(None)
-        # '행정구역코드'
-        #area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        area = re.search(re_area, juso).group(2)
-        area_data.append(area)
-        # '도로명코드'
-        #road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        road = re.search(re_road, juso).group(2)
-        road_data.append(road)
-        # '지하여부'
-        #underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        underground = re.search(re_underground, juso).group(2)
-        underground_data.append(underground)
-        # '지번'
-        #jibun = re.search(re_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #sub_jibun = re.search(re_sub_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        #if sub_jibun is not '0': jibun += '-' + sub_jibun
-        jibun_data.append(jibun)
-        # '건물본번'
-        #building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        building = re.search(re_building, juso).group(2)
-        building_data.append(building)
-        # '건물부번'
-        #sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
-        sub_building = re.search(re_sub_building, juso).group(2)
-        sub_building_data.append(sub_building)
+        try:
+            driver.find_element_by_xpath('//*[@id="keywordRoad"]').click()
+            driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.CONTROL, 'a')
+            driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(address)
+            driver.find_element_by_xpath('//*[@id="formRoadSearch"]/fieldset[1]/div[2]/a').click()                      # 체험하기
+            driver.implicitly_wait(1)
+            driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)        
+            driver.find_element_by_xpath('//*[@id="listRoadSearch"]/p/a').click()                                       # 검색결과형식보기 > 열기
+            index = find_index(jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)               # Getting index
+            if index > 1: index_str = '['+str(index)+']'
+            else: index_str = ''
+            # '소재지(도로명)'
+            new_address = driver.find_element_by_xpath('//*[@id="listRoadSearch"]/table/tbody/tr'+index_str+'/td/p[2]').text
+            new_address_data.append(new_address)
+            # xml <juso> data
+            juso = get_juso(index, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+            # '법정동'
+            #dong_name = re.search(re_dong_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+            dong_name = re.search(re_dong_name, juso)
+            if dong_name is not None and dong_name.group(0) is not '<emdNm>': dong_name_data.append(dong_name.group(2))
+            else: dong_name_data.append(None)
+            # '아파트'
+            #building_name = re.search(re_building_name, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text)
+            #if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
+            #else: building_name_data.append(None)
+            building_name = re.search(re_building_name, juso)
+            if building_name is not None and building_name.group(0) is not '<bdNm>': building_name_data.append(building_name.group(2).replace('아파트', '').replace(' ', ''))
+            else: building_name_data.append(None)
+            # '행정구역코드'
+            #area = re.search(re_area, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            area = re.search(re_area, juso).group(2)
+            area_data.append(area)
+            # '도로명코드'
+            #road = re.search(re_road, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            road = re.search(re_road, juso).group(2)
+            road_data.append(road)
+            # '지하여부'
+            #underground = re.search(re_underground, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            underground = re.search(re_underground, juso).group(2)
+            underground_data.append(underground)
+            # '지번'
+            #jibun = re.search(re_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            #sub_jibun = re.search(re_sub_jibun, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            #if sub_jibun is not '0': jibun += '-' + sub_jibun
+            jibun_data.append(jibun)
+            # '건물본번'
+            #building = re.search(re_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            building = re.search(re_building, juso).group(2)
+            building_data.append(building)
+            # '건물부번'
+            #sub_building = re.search(re_sub_building, driver.find_element_by_xpath('//*[@id="dataListRoadSearch"]').text).group(2)
+            sub_building = re.search(re_sub_building, juso).group(2)
+            sub_building_data.append(sub_building)
+        except NoSuchElementException as e:
+            print ('[ERR] %s (%s)' % (address, str(e)))
+            new_address_data.append(None)
+            dong_name_data.append(None)
+            building_name_data.append(None)
+            area_data.append(None)
+            road_data.append(None)
+            underground_data.append(None)
+            jibun_data.append(None)
+            building_data.append(None)
+            sub_building_data.append(None)
+            driver.close()
+            driver = webdriver.Chrome('../driver/chromedriver', options=options)
+            driver.set_page_load_timeout(TIMEOUT_TIME)
+            driver.get(url)
+
         # HOME
         driver.find_element_by_xpath('//*[@id="keywordRoad"]').send_keys(Keys.HOME)
 
@@ -461,7 +484,8 @@ if init():
     for i, code in codes.iteritems():
         for j in range(6):      # 최근 6개월간 데이터 수집
             now_delta = now + dateutil.relativedelta.relativedelta(months=-j)
-            getActualPrice(driver, apt_data, now_delta.year, now_delta.month, code, key)
+            if code is not None:
+                getActualPrice(driver, apt_data, now_delta.year, now_delta.month, code, key)
     apt_data['거래일'] = pd.to_datetime(apt_data['거래일'], format='%Y-%m-%d')
 
     # '건축년도' 데이터 처리
@@ -554,18 +578,23 @@ if init():
     # '주의사항/법원문건접수', '감정평가요항표' 데이터 처리
     pd_data.insert(38, '주의사항/법원문건접수', None)
     pd_data.insert(39, '감정평가요항표', None)
+    pd_data.insert(8, '거주인', None)
     url = 'http://hese.co.kr/index.php'
     driver.get(url)
+    re_resident = re.compile(r'(([가-힣]..\(|)(채무자 |채무자|)(겸 |겸|)(소유자|임차인|채무자)(들|\)|(\([가-힣○]+\))|)(으로 |를 |을 | |)(추정되는 |보이는 |)([가-힣]○○|)(을 | |)(세대주|세대|)(만 |가 |로 하는 세대가 |)(전입|등재|기재))|(해당 주소의 세대주가 존재하지 않음)|(임차인\([가-힣○]+\))|([가-힣]+\(채무자 겸 소유자\)|채무자\(소유자\)(\)|( [가-힣]○○)))|([가-힣]+소유자\([가-힣]+\))|([가-힣]+\(소유자\))|(([가-힣]|)(소유자|채무자)\([가-힣]+\))|([가-힣]+\(채무자겸소유자\))|(채무자겸소유자 [가-힣]..)')
     for i in range(len(pd_data)):
         info = getHumint(driver, pd_data['사건번호'].iloc[i])
-        #print ('%d, %d' % len(info) % len(info[0]), info)
         if len(info[0]) is not 0:
             if len(info) > 0: pd_data['감정평가요항표'].iloc[i] = info[0]
-            if len(info) > 1: pd_data['주의사항/법원문건접수'].iloc[i] = info[1][20:]
+            if len(info) > 1:
+                pd_data['주의사항/법원문건접수'].iloc[i] = info[1][20:]
+                resident = re.search(re_resident, info[1][20:])
+                if resident is not None:
+                    pd_data['거주인'].iloc[i] = resident.group(0)
         else:
             driver.close()
             driver = webdriver.Chrome('../driver/chromedriver', options=options)
-            driver.set_page_load_timeout(5)
+            driver.set_page_load_timeout(TIMEOUT_TIME)
             driver.get(url)
 
     # Closing chrome browser
