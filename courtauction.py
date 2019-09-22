@@ -45,7 +45,6 @@ def get_juso(index, text):
 # http://www.serve.co.kr/maemul/pop_cal_acquisition_reg_tax.asp
 def getTax(driver, cost, area):
     cost = int(cost) / 10000
-    print ('cost:%s/%s, area:%s/%s' % (type(cost), cost, type(area), area))
     driver.find_element_by_xpath('//*[@id="price1"]').click()                                              # 취득가액 선택
     driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.CONTROL, 'a')
     driver.find_element_by_xpath('//*[@id="price1"]').send_keys(Keys.DELETE)
@@ -436,7 +435,7 @@ if init():
             sub_building_data.append(sub_building)
         except NoSuchElementException as e:
             print ('[ERR] %s (%s)' % (address, str(e)))
-            new_address_data.append(None)
+            new_address_data.append(address)
             dong_name_data.append(None)
             building_name_data.append(None)
             area_data.append(None)
@@ -581,7 +580,7 @@ if init():
     pd_data.insert(8, '거주인', None)
     url = 'http://hese.co.kr/index.php'
     driver.get(url)
-    re_resident = re.compile(r'(([가-힣]..\(|)(채무자 |채무자|)(겸 |겸|)(소유자|임차인|채무자)(들|\)|(\([가-힣○]+\))|)(으로 |를 |을 | |)(추정되는 |보이는 |)([가-힣]○○|)(을 | |)(세대주|세대|)(만 |가 |로 하는 세대가 |)(전입|등재|기재))|(해당 주소의 세대주가 존재하지 않음)|(임차인\([가-힣○]+\))|([가-힣]+\(채무자 겸 소유자\)|채무자\(소유자\)(\)|( [가-힣]○○)))|([가-힣]+소유자\([가-힣]+\))|([가-힣]+\(소유자\))|(([가-힣]|)(소유자|채무자)\([가-힣]+\))|([가-힣]+\(채무자겸소유자\))|(채무자겸소유자 [가-힣]..)')
+    re_resident = re.compile(r'(([가-힣]..\(|)(채무자 |채무자|)(겸 |겸|)(\(|)(소유자|임차인|채무자|[가-힣]○○)(\)|)(들|\)과 |)([가-힣 ]+\)|\)|(\([가-힣○, ]+\))| [가-힣○]..\([가-힣\: ]+\)|)(으로 |를 |을 | |)(추정되는 |보이는 |)([가-힣]○○, |){50}([가-힣]○○|[가-힣○]+|)(을 | |)(세대주|세대|)(만 |가 |로 하는 세대|외에 |와 별지와 같이 |배우자|)( |로 | 및 |들이 각각 |)(임차인\([가-힣]○○\)|임차인 |[가-힣]..|)(을 |를 |)(세대주로 하는|)(세대| 세대|)( |가 각각 |가 각 |가 |)(전입|등재|기재))|((해당 주소)(의|에)( )(세대주|전입세대)(가 )(존재하지 않음|없음))|([가-힣]..을 세대주로 하는 세대가 전입)')
     for i in range(len(pd_data)):
         info = getHumint(driver, pd_data['사건번호'].iloc[i])
         if len(info[0]) is not 0:
