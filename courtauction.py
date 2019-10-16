@@ -223,7 +223,9 @@ def getActualPrice(driver, apt_data, year, month, code, key):
         item_data.append(apt.find('법정동').text.strip())
         item_data.append(apt.find('아파트').text.strip())
         item_data.append(apt.find('전용면적').text.strip())
-        item_data.append(apt.find('지번').text.strip())
+        if apt.find('지번') is not None:
+            item_data.append(apt.find('지번').text.strip())
+        else: item_data.append(None)
         item_data.append(apt.find('지역코드').text.strip())
         item_data.append(apt.find('층').text.strip())
         apt_data.loc[len(apt_data)] = item_data
